@@ -17,7 +17,7 @@ dev = ["pytest==9.2.0", "ruff==0.17.5", "numpy==2.4.6"]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/ingest"]
+members = ["packages/ingest", "tools/accent"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "tools"]
@@ -26,6 +26,7 @@ markers = [
 ]
 pythonpath = [
     "packages/ingest/src",
+    "tools/accent/src",
 ]
 addopts = "-m 'not integration' --import-mode=importlib"
 

@@ -1,0 +1,24 @@
+[project]
+name = "accent"
+version = "0.2.0"
+description = "Guess the English accent of a speaker with SpeechBrain's CommonAccent models"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ingest",
+    "speechbrain==1.1.2",
+    "torch==2.15.0",
+    "torchaudio==2.11.1",
+    "transformers==5.23.0",  # XLSR model's wav2vec2 encoder
+    "numpy==2.4.6",
+]
+
+[project.scripts]
+accent = "accent.cli:main"
+
+[tool.uv.sources]
+ingest = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
