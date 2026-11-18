@@ -260,6 +260,7 @@ def run(opts: Options) -> Result:
             segments = lines.split_lines(kept)
             for line in segments:  # confidence per sung line, not per Whisper segment
                 hallucination.score(line)
+            segments = hallucination.collapse_line_loops(segments)
         else:
             raw = transcribe_speech(model, reader, voice, report, workdir, opts.use_cache, opts.language)
             segments, dropped = hallucination.filter_segments(raw, voice)

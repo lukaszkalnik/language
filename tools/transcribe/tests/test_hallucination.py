@@ -1,7 +1,9 @@
 from helpers import seg, words
 
 from transcribe.hallucination import (
+    collapse_line_loops,
     collapse_repeats,
+    collapse_word_loops,
     compression_ratio,
     filter_segments,
     is_known_phrase,
@@ -56,3 +58,16 @@ def test_voice_overlap():
     assert voice_overlap(seg("x", 0, 10), [(0, 5)]) == 0.5
     assert voice_overlap(seg("x", 0, 10), [(0, 3), (8, 20)]) == 0.5
     assert voice_overlap(seg("x", 5, 5), [(0, 10)]) == 0.0
+
+
+def test_word_level_loop_collapse_keeps_timings_consistent():
+    s = seg("", 0, 10, words=words(" ".join(["la"] * 12)))
+    collapse_word_loops(s)
+    assert [w.text.strip() for w in s.words] == ["la", "la"]
+
+
+def test_identical_low_confidence_lines_are_cut_but_choruses_stay():
+    chorus = [seg("Alors on danse", i, i + 1) for i in range(6)]
+    assert len(collapse_line_loops(chorus)) == 6
+    loop = [seg("la la", i, i + 1, low_confidence=True) for i in range(10)]
+    assert len(collapse_line_loops(loop)) == 2

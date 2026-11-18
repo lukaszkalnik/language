@@ -45,23 +45,54 @@ def is_known_phrase(text: str) -> bool:
     return any(p in norm for p in KNOWN_PHRASES)
 
 
-def collapse_repeats(text: str, max_repeats: int = 2) -> str:
-    """'na na na na na na' -> 'na na' style loops are cut to max_repeats repetitions of the unit."""
-    words = text.split()
+def loop_keep(tokens: list[str], max_repeats: int = 2) -> list[int]:
+    """Indices to keep so that a unit of 1-6 tokens repeated in a loop appears max_repeats times."""
+    keep = list(range(len(tokens)))
     for unit in range(1, 7):
+        keys = [normalise(tokens[k]) for k in keep]
         i, out = 0, []
-        while i < len(words):
-            chunk = words[i:i + unit]
+        while i < len(keep):
+            chunk = keys[i:i + unit]
             reps = 1
-            while words[i + reps * unit:i + (reps + 1) * unit] == chunk and len(chunk) == unit:
+            while keys[i + reps * unit:i + (reps + 1) * unit] == chunk and len(chunk) == unit:
                 reps += 1
             if reps > max_repeats + 1 and unit * reps >= 6:
-                out.extend(chunk * max_repeats)
+                out.extend(keep[i:i + unit * max_repeats])
             else:
-                out.extend(words[i:i + reps * unit])
+                out.extend(keep[i:i + reps * unit])
             i += reps * unit
-        words = out
-    return " ".join(words)
+        keep = out
+    return keep
+
+
+def collapse_repeats(text: str, max_repeats: int = 2) -> str:
+    """'na na na na na na na' -> 'na na': loops are cut to max_repeats repetitions of the unit."""
+    words = text.split()
+    return " ".join(words[i] for i in loop_keep(words, max_repeats))
+
+
+def collapse_word_loops(seg: Segment, max_repeats: int = 2) -> None:
+    """Same as collapse_repeats, on the word timings (song lines are rebuilt from words)."""
+    if seg.words:
+        keep = loop_keep([w.text for w in seg.words], max_repeats)
+        if len(keep) < len(seg.words):
+            seg.words = [seg.words[i] for i in keep]
+
+
+def collapse_line_loops(lines: list[Segment], max_run: int = 2) -> list[Segment]:
+    """A run of identical *low-confidence* lines is a Whisper loop: keep max_run of them.
+
+    Confident repeats stay: choruses really do repeat the same line many times.
+    """
+    out: list[Segment] = []
+    run = 0
+    for line in lines:
+        same = out and normalise(out[-1].text) == normalise(line.text)
+        run = run + 1 if same else 1
+        if same and run > max_run and line.low_confidence and out[-1].low_confidence:
+            continue
+        out.append(line)
+    return out
 
 
 def voice_overlap(seg: Segment, regions: list[tuple[float, float]]) -> float:
@@ -113,6 +144,7 @@ def filter_segments(
             dropped.append((seg, reason))
             continue
         seg.text = collapse_repeats(text)
+        collapse_word_loops(seg)
         score(seg, low_confidence)
         kept.append(seg)
         previous = seg
