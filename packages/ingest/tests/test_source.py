@@ -122,3 +122,22 @@ def test_ffmpeg_missing_gives_install_hint(monkeypatch):
     monkeypatch.setattr(audio.shutil, "which", lambda name: None)
     with pytest.raises(AudioError, match="ffmpeg was not found on PATH. Install"):
         audio.require_ffmpeg()
+
+
+def test_wav_tags_round_trip_and_stay_readable(tmp_path):
+    wav = tmp_path / "v.wav"
+    samples = _sine(1.0, 8000)
+    audio.write_wav(wav, samples, 8000)
+    audio.add_wav_tags(wav, {"ISFT": "vocals/htdemucs_ft/vocals", "INAM": "Ünïcode title"})
+    assert audio.read_wav_tags(wav) == {"ISFT": "vocals/htdemucs_ft/vocals", "INAM": "Ünïcode title"}
+    with audio.WavReader(wav) as reader:  # the extra chunk does not disturb readers
+        assert len(reader.read()) == len(samples)
+
+
+def test_wav_tags_of_untagged_and_non_wav(tmp_path):
+    wav = tmp_path / "plain.wav"
+    audio.write_wav(wav, _sine(0.1, 8000), 8000)
+    assert audio.read_wav_tags(wav) == {}
+    other = tmp_path / "x.mp3"
+    other.write_bytes(b"ID3....")
+    assert audio.read_wav_tags(other) == {}

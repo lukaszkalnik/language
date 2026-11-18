@@ -189,3 +189,62 @@ def rms_dbfs(samples: np.ndarray) -> float:
         return float("-inf")
     rms = float(np.sqrt(np.mean(np.square(samples, dtype=np.float64))))
     return float(20 * np.log10(rms)) if rms > 0 else float("-inf")
+
+
+# --- WAV metadata (RIFF LIST/INFO), so tools can pass facts down a pipe -----------------
+# vocals writes e.g. ISFT="vocals/htdemucs_ft/vocals" and INAM=<video title>; transcribe reads
+# it to know its input is already separated. ffmpeg and the wave module ignore the chunk.
+
+def add_wav_tags(path: Path, tags: dict[str, str]) -> None:
+    """Append a LIST/INFO chunk to a WAV file. Keys are 4-letter RIFF INFO IDs (INAM, ISFT, ICMT...)."""
+    body = b"INFO"
+    for key, value in tags.items():
+        if len(key) != 4:
+            raise ValueError(f"RIFF INFO keys have 4 characters: {key!r}")
+        data = value.encode("utf-8") + b"\0"
+        body += key.encode("ascii") + len(data).to_bytes(4, "little") + data + (b"\0" if len(data) % 2 else b"")
+    chunk = b"LIST" + len(body).to_bytes(4, "little") + body
+    with open(path, "r+b") as fh:
+        header = fh.read(12)
+        if header[:4] != b"RIFF" or header[8:12] != b"WAVE":
+            raise AudioError(f"{path.name} is not a WAV file")
+        fh.seek(0, 2)
+        if fh.tell() % 2:
+            fh.write(b"\0")
+        fh.write(chunk)
+        size = fh.tell() - 8
+        fh.seek(4)
+        fh.write(size.to_bytes(4, "little"))
+
+
+def read_wav_tags(path: Path) -> dict[str, str]:
+    """RIFF INFO tags of a WAV file ({} for other formats or files without tags)."""
+    tags: dict[str, str] = {}
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(12)
+            if header[:4] != b"RIFF" or header[8:12] != b"WAVE":
+                return tags
+            while True:
+                head = fh.read(8)
+                if len(head) < 8:
+                    break
+                cid, size = head[:4], int.from_bytes(head[4:], "little")
+                if cid == b"LIST":
+                    body = fh.read(size)
+                    if body[:4] == b"INFO":
+                        pos = 4
+                        while pos + 8 <= len(body):
+                            key = body[pos:pos + 4].decode("ascii", "replace")
+                            n = int.from_bytes(body[pos + 4:pos + 8], "little")
+                            tags[key] = body[pos + 8:pos + 8 + n].rstrip(b"\0").decode("utf-8", "replace")
+                            pos += 8 + n + (n % 2)
+                elif cid == b"data" and size in (0, 0xFFFFFFFF):
+                    break  # streamed WAV of unknown length: nothing reliable after it
+                else:
+                    fh.seek(size + (size % 2), 1)
+                if size % 2 and cid == b"LIST":
+                    fh.seek(1, 1)
+    except OSError:
+        return {}
+    return tags
