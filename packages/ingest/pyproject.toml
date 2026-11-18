@@ -1,0 +1,17 @@
+[project]
+name = "ingest"
+version = "0.1.0"
+description = "Shared input handling for the language tools: files, YouTube, stdin WAV, time ranges, cache"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy==2.4.6",
+    "huggingface-hub==2.4.0",
+    # Deliberately unpinned: YouTube changes often and old yt-dlp releases stop
+    # working. The [default] extra pulls in yt-dlp-ejs for YouTube's JS challenges.
+    "yt-dlp[default]>=2026.10.26",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
