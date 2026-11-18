@@ -1,9 +1,9 @@
 import json
 
-from helpers import seg
+from helpers import seg, words
 
 from transcribe import formats
-from transcribe.speakers import assign_speakers, name_speakers, parse_names
+from transcribe.speakers import assign_speakers, name_speakers, parse_names, split_at_turns
 
 
 def song():
@@ -73,3 +73,19 @@ def test_assign_speakers_by_overlap_and_nearest():
     turns = [(0, 5, "A"), (5, 12, "B")]
     assign_speakers(segs, turns)
     assert [s.speaker for s in segs] == ["A", "B", "B"]
+
+
+def test_segment_is_split_where_the_other_speaker_starts():
+    w = words("so how did they think that is a very good question", step=0.5)  # 0..5.5 s
+    turns = [(0, 2.9, "LEX"), (2.9, 10, "LARS")]  # "that" starts at 3.0
+    out = split_at_turns([seg("", 0, 5.5, words=w)], turns)
+    assign_speakers(out, turns)
+    assert [(s.text, s.speaker) for s in out] == [("so how did they think", "LEX"),
+                                                  ("that is a very good question", "LARS")]
+
+
+def test_single_stray_word_does_not_split():
+    w = words("one two three four five six", step=0.5)
+    turns = [(0, 1.4, "A"), (1.4, 1.9, "B"), (1.9, 10, "A")]  # only "four" is in B's turn
+    out = split_at_turns([seg("", 0, 3, words=w)], turns)
+    assert len(out) == 1

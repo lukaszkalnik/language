@@ -276,6 +276,7 @@ def run(opts: Options) -> Result:
                 if turns is None:
                     status("Diarizing with SpeechBrain ECAPA embeddings...")
                     turns = diarize.ecapa_turns(reader, voice, opts.num_speakers, opts.device)
+                segments = speakers.split_at_turns(segments, turns)
                 speakers.assign_speakers(segments, turns)
                 names = speakers.name_speakers(segments, opts.names)
                 status(f"Speakers: {len(names)} ({', '.join(names)})")
