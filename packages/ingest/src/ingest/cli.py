@@ -31,27 +31,36 @@ def add_input_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--end", type=time_arg, metavar="TIME", help="stop here (seconds, mm:ss or hh:mm:ss)")
     parser.add_argument("--no-cache", action="store_true", help="ignore cached downloads and results; compute again")
     parser.add_argument("--cache-dir", metavar="DIR", help=f"shared cache folder (default: {cache.cache_root()}; or set {cache.ENV_VAR})")
-    parser.add_argument("--ipv4", action="store_true", help="force IPv4 for downloads (or set LANGUAGE_IPV4=1)")
+    parser.add_argument("--ipv4", action="store_true", help="use IPv4 only for downloads (IPv4 is always tried first; or set LANGUAGE_IPV4=1)")
 
 
-def force_ipv4() -> None:
-    """Make every library in this process resolve hostnames to IPv4 only."""
-    original = socket.getaddrinfo
+def order_addresses(results: list, ipv4_only: bool = False) -> list:
+    """IPv4 addresses first (or only), so a network with broken IPv6 does not hang downloads.
 
-    def ipv4_only(*args, **kwargs):
-        results = original(*args, **kwargs)
-        v4 = [r for r in results if r[0] == socket.AF_INET]
+    Python tries addresses in order and has no "happy eyeballs", so an IPv6 address that
+    never answers blocks until a long timeout. IPv6 stays as a fallback unless ipv4_only.
+    """
+    v4 = [r for r in results if r[0] == socket.AF_INET]
+    if ipv4_only:
         return v4 or results
+    return v4 + [r for r in results if r[0] != socket.AF_INET]
 
-    socket.getaddrinfo = ipv4_only
+
+_original_getaddrinfo = socket.getaddrinfo
+
+
+def prefer_ipv4(strict: bool = False) -> None:
+    def patched(*args, **kwargs):
+        return order_addresses(_original_getaddrinfo(*args, **kwargs), strict)
+
+    socket.getaddrinfo = patched
 
 
 def apply_common(args: argparse.Namespace) -> None:
     if getattr(args, "cache_dir", None):
         cache.set_cache_root(args.cache_dir)
-    if getattr(args, "ipv4", False) or os.environ.get("LANGUAGE_IPV4") == "1":
-        args.ipv4 = True
-        force_ipv4()
+    args.ipv4 = getattr(args, "ipv4", False) or os.environ.get("LANGUAGE_IPV4") == "1"
+    prefer_ipv4(strict=args.ipv4)
 
 
 def run(main: Callable[[], int | None], prog: str) -> int:

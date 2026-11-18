@@ -1,4 +1,5 @@
 import pytest
+
 from ingest.errors import YouTubeError
 from ingest.youtube import (
     check_single_finished_video,

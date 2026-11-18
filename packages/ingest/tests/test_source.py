@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 from ingest import audio, cache, source
 from ingest.errors import AudioError
 

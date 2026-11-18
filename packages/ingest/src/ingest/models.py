@@ -88,6 +88,7 @@ def quiet_libraries(*names: str) -> None:
     os.environ.setdefault("SB_LOG_LEVEL", "ERROR")
     os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    os.environ.setdefault("HF_HUB_VERBOSITY", "error")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     warnings.filterwarnings("ignore")
     for name in ("speechbrain", "transformers", "huggingface_hub", "torch", "pyannote", "lightning", *names):
