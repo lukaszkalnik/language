@@ -1,0 +1,25 @@
+[project]
+name = "translate"
+version = "0.1.0"
+description = "Translate text or transcribe JSON locally: an LLM through Ollama, or NLLB-200 offline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ingest",
+    "py3langid==0.4.0",  # source-language detection for plain text (4 MB, no download)
+    # NLLB backend
+    "transformers==5.23.0",
+    "sentencepiece==0.2.3",
+    "torch==2.15.0",
+    "numpy==2.4.6",
+]
+
+[project.scripts]
+translate = "translate.cli:main"
+
+[tool.uv.sources]
+ingest = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"

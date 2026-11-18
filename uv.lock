@@ -27,6 +27,7 @@ members = [
     "ingest",
     "language-workspace",
     "transcribe",
+    "translate",
     "vocals",
 ]
 
@@ -1710,6 +1711,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "numpy" },
+    { name = "py3langid" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "scipy" },
@@ -1720,6 +1722,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "numpy", specifier = "==2.4.6" },
+    { name = "py3langid", specifier = "==0.4.0" },
     { name = "pytest", specifier = "==9.2.0" },
     { name = "ruff", specifier = "==0.17.5" },
     { name = "scipy", specifier = "==1.17.1" },
@@ -3009,6 +3012,18 @@ wheels = [
 ]
 
 [[package]]
+name = "py3langid"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/fc/51c88e5ef8346878ae6c09e1f7c86c6e6308c57794723bf423a72ddba4dd/py3langid-0.4.0.tar.gz", hash = "sha256:5924159039b5cc282c2edc10a7ea9363b2099834a0e99ed8d5bea3cc435d7871", size = 4604185, upload-time = "2026-09-02T09:10:53.983Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/2d/0eeff2727c970b1d553be70d15ba2d84e3830696c09a79d954c5ae3d5212/py3langid-0.4.0-py3-none-any.whl", hash = "sha256:c25bd038147951ba3a89efe9ec12cc7d2116cb6f311ff8af84ade398a8bc0616", size = 4600605, upload-time = "2026-09-02T09:10:49.54Z" },
+]
+
+[[package]]
 name = "pyannote-audio"
 version = "4.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4287,6 +4302,29 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7e/d3/1ff04cfc1ddbc6853af16973b17cd437426b4303599bc3e84af11fe55057/transformers-5.23.0.tar.gz", hash = "sha256:19d647a4d5d903a7c644ca5cde2d86efc3dde7d8c687ae7988806ff2205efa71", size = 10614788, upload-time = "2026-11-13T14:10:39.947Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bf/62/8c06b0b932cc9a5dac7ce48bf23737107143e75f9b20fd99e97dde1463c3/transformers-5.23.0-py3-none-any.whl", hash = "sha256:018e82fd07490ad5bb58414f65e31576033dc7f36bed10c574843f69b90991bf", size = 13336114, upload-time = "2026-11-13T14:10:36.154Z" },
+]
+
+[[package]]
+name = "translate"
+version = "0.1.0"
+source = { editable = "tools/translate" }
+dependencies = [
+    { name = "ingest" },
+    { name = "numpy" },
+    { name = "py3langid" },
+    { name = "sentencepiece" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ingest", editable = "packages/ingest" },
+    { name = "numpy", specifier = "==2.4.6" },
+    { name = "py3langid", specifier = "==0.4.0" },
+    { name = "sentencepiece", specifier = "==0.2.3" },
+    { name = "torch", specifier = "==2.15.0" },
+    { name = "transformers", specifier = "==5.23.0" },
 ]
 
 [[package]]
