@@ -24,11 +24,17 @@ def _status(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
-def hf_is_cached(repo_id: str, filename: str) -> bool:
-    from huggingface_hub import try_to_load_from_cache
+def hf_is_cached(repo_id: str, filename: str | None = None) -> bool:
+    """True if `filename` (or, without one, any snapshot of the repo) is in the local HF cache."""
+    from huggingface_hub import snapshot_download, try_to_load_from_cache
 
-    hit = try_to_load_from_cache(repo_id, filename)
-    return isinstance(hit, str)
+    if filename and isinstance(try_to_load_from_cache(repo_id, filename), str):
+        return True
+    try:
+        snapshot_download(repo_id, local_files_only=True)
+        return True
+    except Exception:
+        return False
 
 
 def hf_repo_size(repo_id: str, patterns: list[str] | None = None) -> int | None:
