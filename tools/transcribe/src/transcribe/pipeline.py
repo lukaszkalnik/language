@@ -142,7 +142,10 @@ def _restrict(probs: dict[str, float], allowed: list[str]) -> str:
 
 
 def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bool, fixed_language: str | None):
-    pieces = vad.plan_pieces(voice, duration=reader.duration)
+    def cut_at(lo: float, hi: float) -> float:
+        return vad.quietest_point(reader.read(lo, hi), lo)
+
+    pieces = vad.plan_pieces(voice, duration=reader.duration, cut_at=cut_at)
     batches: list[list[tuple[float, float]]] = []
     for piece in pieces:
         if not batches or piece[1] - batches[-1][0][0] > BATCH_SECONDS:

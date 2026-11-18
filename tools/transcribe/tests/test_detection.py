@@ -128,3 +128,21 @@ def test_embedding_windows_and_turns():
     turns = windows_to_turns([(0, 2), (1, 3), (2, 4), (10, 12)], np.array([0, 0, 1, 1]))
     assert turns[0][2] == "S0" and turns[1][2] == "S1"
     assert turns[0][1] == pytest.approx(turns[1][0])
+
+
+def test_long_region_is_cut_at_the_quietest_moment():
+    from transcribe.vad import quietest_point, split_region
+
+    sig = np.concatenate([tone(200, 20), np.zeros(SR // 5), tone(200, 15)])  # pause at 20.0-20.2 s
+    cut = quietest_point(sig[int(16 * SR):int(28 * SR)], 16.0)
+    assert 20.0 <= cut <= 20.2
+    pieces = split_region(0, 35.2, 28, cut_at=lambda lo, hi: quietest_point(sig[int(lo * SR):int(hi * SR)], lo))
+    assert len(pieces) == 2 and 20.0 <= pieces[0][1] <= 20.2 and pieces[1] == (pieces[0][1], 35.2)
+
+
+def test_split_region_without_cut_finder_is_even_and_bounded():
+    from transcribe.vad import split_region
+
+    assert split_region(0, 60, 28) == [(0, 20), (20, 40), (40, 60)]
+    weird = split_region(0, 60, 28, cut_at=lambda lo, hi: -5)  # a bad cut is clamped into range
+    assert all(b - a <= 28 for a, b in weird) and weird[-1][1] == 60

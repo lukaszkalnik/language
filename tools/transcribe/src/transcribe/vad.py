@@ -18,12 +18,40 @@ def merge_regions(regions: list[tuple[float, float]], max_gap: float) -> list[tu
     return [(a, b) for a, b in out]
 
 
+def quietest_point(samples: np.ndarray, offset: float, frame: float = 0.05) -> float:
+    """Time (seconds, offset added) of the quietest `frame` in samples: the best place to cut."""
+    n = int(frame * SR)
+    usable = len(samples) // n * n
+    if usable == 0:
+        return offset + len(samples) / SR / 2
+    power = np.mean(samples[:usable].reshape(-1, n) ** 2, axis=1)
+    return offset + (int(np.argmin(power)) + 0.5) * frame
+
+
+def split_region(a: float, b: float, max_len: float, cut_at=None) -> list[tuple[float, float]]:
+    """Split a region longer than max_len. cut_at(lo, hi) picks a cut (e.g. the quietest moment)
+    in the last 40% of each piece; without it the region is split evenly."""
+    if cut_at is None:
+        parts = int(np.ceil((b - a) / max_len))
+        step = (b - a) / parts
+        return [(a + i * step, a + (i + 1) * step) for i in range(parts)]
+    out, pos = [], a
+    while b - pos > max_len:
+        t = cut_at(pos + 0.6 * max_len, pos + max_len)
+        t = min(max(t, pos + 0.6 * max_len), pos + max_len)
+        out.append((pos, t))
+        pos = t
+    out.append((pos, b))
+    return out
+
+
 def plan_pieces(regions: list[tuple[float, float]], max_len: float = 28.0, max_gap: float = 1.5,
-                pad: float = 0.25, duration: float | None = None) -> list[tuple[float, float]]:
+                pad: float = 0.25, duration: float | None = None, cut_at=None) -> list[tuple[float, float]]:
     """Group voice regions into pieces of at most max_len seconds, cut in pauses where possible.
 
     Neighbouring regions closer than max_gap join while the piece stays short enough; a region
-    longer than max_len is split evenly. Each piece gets `pad` seconds either side.
+    longer than max_len is split at its quietest moments (cut_at), so Whisper never sees a word
+    cut in half (it tends to invent a continuation there). Each piece gets `pad` seconds either side.
     """
     pieces: list[tuple[float, float]] = []
     cur: list[float] | None = None
@@ -32,9 +60,7 @@ def plan_pieces(regions: list[tuple[float, float]], max_len: float = 28.0, max_g
             if cur:
                 pieces.append((cur[0], cur[1]))
                 cur = None
-            parts = int(np.ceil((b - a) / max_len))
-            step = (b - a) / parts
-            pieces += [(a + i * step, a + (i + 1) * step) for i in range(parts)]
+            pieces += split_region(a, b, max_len, cut_at)
             continue
         if cur and a - cur[1] <= max_gap and b - cur[0] <= max_len:
             cur[1] = b
