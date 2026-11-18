@@ -86,6 +86,13 @@ def test_parse_reply_tolerates_formats_and_ignores_extras():
     assert parse_reply(reply, 4) == {1: "Eins", 2: "Zwei", 3: "Drei", 4: "Vier"}
 
 
+def test_parse_reply_skips_echoed_source_lines():
+    reply = "1| Alors on danse\n1| Also tanzen wir\n2| Merci\n2| Danke"
+    assert parse_reply(reply, 2, ["Alors on danse", "Merci"]) == {1: "Also tanzen wir", 2: "Danke"}
+    # A line that really stays the same (a name) is still accepted.
+    assert parse_reply("1| Stromae", 1, ["Stromae"]) == {1: "Stromae"}
+
+
 def test_prompt_numbers_every_line_and_asks_for_faithful_translation():
     doc = parse("Alors on danse\nQui dit étude dit travail")
     (chunk,) = make_chunks(doc)

@@ -61,7 +61,8 @@ def build_messages(chunk: Chunk, source: str | None, target: str, song: bool) ->
         "Keep the meaning, tone and register. Render idioms and wordplay with a natural equivalent where one exists, "
         "otherwise translate the meaning; do not add explanations.",
         "Keep names, brands and technical terms. If a line is already in the target language, repeat it unchanged.",
-        "Output only the numbered lines in the form `N| translation`, nothing else.",
+        "Output only the translated lines in the form `N| translation`, one per input line. "
+        "Do not repeat the original lines, do not add notes.",
     ]
     if song:
         rules.insert(2, "These are song lyrics, given in full so you can use the context. Give a faithful translation, "
@@ -76,13 +77,23 @@ def build_messages(chunk: Chunk, source: str | None, target: str, song: bool) ->
     return [{"role": "system", "content": "\n".join(rules)}, {"role": "user", "content": "\n\n".join(parts)}]
 
 
-def parse_reply(text: str, expected: int) -> dict[int, str]:
-    """Numbered lines from the model's reply -> {number: translation}."""
-    out: dict[int, str] = {}
+def parse_reply(text: str, expected: int, sources: list[str] | None = None) -> dict[int, str]:
+    """Numbered lines from the model's reply -> {number: translation}.
+
+    Models sometimes echo each source line before its translation ("3| original" then
+    "3| translation"); when a number appears more than once, the last line that differs from
+    the source wins.
+    """
+    candidates: dict[int, list[str]] = {}
     for line in text.splitlines():
         m = LINE_RE.match(line)
-        if m and 1 <= int(m.group(1)) <= expected and int(m.group(1)) not in out:
-            out[int(m.group(1))] = m.group(2).strip()
+        if m and 1 <= int(m.group(1)) <= expected:
+            candidates.setdefault(int(m.group(1)), []).append(m.group(2).strip())
+    out: dict[int, str] = {}
+    for n, options in candidates.items():
+        source = sources[n - 1].strip() if sources and n <= len(sources) else None
+        different = [o for o in options if o != source]
+        out[n] = (different or options)[-1]
     if not out and expected == 1 and text.strip():
         out[1] = text.strip().splitlines()[0]
     return out
@@ -113,18 +124,20 @@ class OllamaTranslator:
 
     def translate(self, chunk: Chunk, source: str | None, target: str, song: bool = False) -> list[str]:
         n = len(chunk.units)
-        got = parse_reply(self._chat(build_messages(chunk, source, target, song)), n)
+        texts = [u.text for u in chunk.units]
+        got = parse_reply(self._chat(build_messages(chunk, source, target, song)), n, texts)
         missing = [i for i in range(1, n + 1) if i not in got]
         if missing and len(missing) < n:
             # Ask again for just the lines that went missing, keeping the rest of the chunk as context.
             retry = Chunk([chunk.units[i - 1] for i in missing], chunk.context + [u for i, u in enumerate(chunk.units, 1) if i in got])
-            again = parse_reply(self._chat(build_messages(retry, source, target, song)), len(missing))
+            again = parse_reply(self._chat(build_messages(retry, source, target, song)), len(missing),
+                                [u.text for u in retry.units])
             for j, i in enumerate(missing, 1):
                 if j in again:
                     got[i] = again[j]
         elif missing:
             got = {}
             for i, unit in enumerate(chunk.units, 1):  # line by line as a last resort
-                one = parse_reply(self._chat(build_messages(Chunk([unit], chunk.context), source, target, song)), 1)
+                one = parse_reply(self._chat(build_messages(Chunk([unit], chunk.context), source, target, song)), 1, [unit.text])
                 got[i] = one.get(1, "")
         return [got.get(i, "") for i in range(1, n + 1)]
