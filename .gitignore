@@ -1,0 +1,24 @@
+# Virtual environments
+.venv/
+
+# Shared download / derived-audio / model cache (if pointed inside the repo)
+.cache/
+
+# Outputs people tend to create while trying the tools
+*.wav
+*.lrc
+*.srt
+*.vtt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
