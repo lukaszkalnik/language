@@ -11,7 +11,7 @@ dependencies = []
 [dependency-groups]
 # Unit tests import the sources directly (see pythonpath below) and need no models,
 # so the root environment stays small: no torch, no model libraries.
-dev = ["pytest==9.2.0", "ruff==0.17.5", "numpy==2.4.6"]
+dev = ["pytest==9.2.0", "ruff==0.17.5", "numpy==2.4.6", "scipy==1.17.1"]
 
 [tool.uv]
 package = false
@@ -24,7 +24,7 @@ environments = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/ingest", "tools/accent", "tools/vocals"]
+members = ["packages/ingest", "tools/accent", "tools/vocals", "tools/transcribe"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "tools"]
@@ -35,6 +35,7 @@ pythonpath = [
     "packages/ingest/src",
     "tools/accent/src",
     "tools/vocals/src",
+    "tools/transcribe/src",
 ]
 addopts = "-m 'not integration' --import-mode=importlib"
 

@@ -1,0 +1,58 @@
+from helpers import seg, words
+
+from transcribe.hallucination import (
+    collapse_repeats,
+    compression_ratio,
+    filter_segments,
+    is_known_phrase,
+    voice_overlap,
+)
+
+
+def test_drops_segments_without_voice():
+    voice = [(0.0, 10.0)]
+    kept, dropped = filter_segments([seg("hello there", 1, 3), seg("invented words", 20, 23)], voice)
+    assert [s.text for s in kept] == ["hello there"]
+    assert dropped[0][1] == "no voice detected"
+
+
+def test_drops_known_phrases_on_silence_but_keeps_confident_speech():
+    weak = seg("Thanks for watching!", 50, 52, avg_logprob=-0.9)
+    kept, dropped = filter_segments([weak])
+    assert not kept and dropped[0][1] == "known hallucination"
+    real = seg("And that's all, thanks for watching the whole series with me today", 0, 6, avg_logprob=-0.2)
+    assert filter_segments([real])[0]
+
+
+def test_drops_music_only_and_no_speech():
+    kept, dropped = filter_segments([seg("♪ ♪"), seg("[Music]"), seg("x", 0, 2, no_speech_prob=0.9, avg_logprob=-1.4)])
+    assert kept == [] and len(dropped) == 3
+
+
+def test_low_confidence_is_marked_not_hidden():
+    shaky = seg("maybe these words", 0, 2, words=words("maybe these words", prob=0.3))
+    sure = seg("clear words here", 3, 5, words=words("clear words here", start=3, prob=0.95))
+    kept, dropped = filter_segments([shaky, sure])
+    assert not dropped
+    assert kept[0].low_confidence and not kept[1].low_confidence
+    assert 0.25 < kept[0].confidence < 0.35
+
+
+def test_repetition_loops_are_collapsed_and_flagged():
+    looped = " ".join(["I love you"] * 10)
+    assert compression_ratio(looped) > 2.4
+    assert collapse_repeats(looped) == "I love you I love you"
+    kept, _ = filter_segments([seg(looped, 0, 10)])
+    assert kept[0].text == "I love you I love you"
+
+
+def test_known_phrase_matching_ignores_case_and_punctuation():
+    assert is_known_phrase("Untertitel im Auftrag des ZDF, 2021")
+    assert is_known_phrase("Subtitles by the Amara.org community")
+    assert not is_known_phrase("We watched the subtitles")
+
+
+def test_voice_overlap():
+    assert voice_overlap(seg("x", 0, 10), [(0, 5)]) == 0.5
+    assert voice_overlap(seg("x", 0, 10), [(0, 3), (8, 20)]) == 0.5
+    assert voice_overlap(seg("x", 5, 5), [(0, 10)]) == 0.0

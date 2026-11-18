@@ -1,0 +1,32 @@
+[project]
+name = "transcribe"
+version = "0.1.0"
+description = "Detect the language and transcribe speech or singing with Whisper (MLX on Apple Silicon)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ingest",
+    "numpy==2.4.6",
+    "scipy==1.17.1",
+    "torch==2.15.0",
+    "torchaudio==2.11.1",
+    # Whisper: MLX on Apple Silicon, CTranslate2 (faster-whisper) everywhere else.
+    "mlx==0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx-whisper==0.4.3; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "faster-whisper==1.2.1; sys_platform != 'darwin' or platform_machine != 'arm64'",
+    # Voice activity detection.
+    "silero-vad==6.2.3",
+    # Speaker diarization: pyannote (needs a free HF token), SpeechBrain ECAPA as token-free fallback.
+    "pyannote.audio==4.1.0",
+    "speechbrain==1.1.2",
+]
+
+[project.scripts]
+transcribe = "transcribe.cli:main"
+
+[tool.uv.sources]
+ingest = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
