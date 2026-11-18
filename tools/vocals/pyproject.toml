@@ -1,0 +1,22 @@
+[project]
+name = "vocals"
+version = "0.1.0"
+description = "Separate vocals (or other stems) from music with Demucs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ingest",
+    "demucs==4.1.0",
+    "torch==2.15.0",
+    "numpy==2.4.6",
+]
+
+[project.scripts]
+vocals = "vocals.cli:main"
+
+[tool.uv.sources]
+ingest = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
