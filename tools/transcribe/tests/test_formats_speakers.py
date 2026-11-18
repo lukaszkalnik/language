@@ -77,7 +77,7 @@ def test_assign_speakers_by_overlap_and_nearest():
 
 def test_segment_is_split_where_the_other_speaker_starts():
     w = words("so how did they think that is a very good question", step=0.5)  # 0..5.5 s
-    turns = [(0, 2.9, "LEX"), (2.9, 10, "LARS")]  # "that" starts at 3.0
+    turns = [(0, 2.4, "LEX"), (2.4, 10, "LARS")]  # "that" starts at 2.5
     out = split_at_turns([seg("", 0, 5.5, words=w)], turns)
     assign_speakers(out, turns)
     assert [(s.text, s.speaker) for s in out] == [("so how did they think", "LEX"),
