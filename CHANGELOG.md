@@ -3,7 +3,10 @@
 What changed for people using Language, newest release first. Each release lists the most
 important changes first. The section for a release opens its GitHub release notes.
 
-## 0.3.0
+## 0.3.1
+
+(0.3.0 was tagged but never published: its build stopped at a failing test.)
+
 
 - **Work on just the part you need.** As soon as you paste a link or a file, its length appears
   on a new **Range** slider (nothing is downloaded yet). Pick, say, 1:00–2:00 of a two-hour
