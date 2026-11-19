@@ -118,8 +118,9 @@ class App:
         out.grid(row=5, column=0, columnspan=2, sticky="nsew")
         out.rowconfigure(1, weight=1)
         out.columnconfigure(0, weight=1)
-        text_font = tkfont.nametofont("TkTextFont").copy()  # proportional: easier to read than fixed
-        text_font.configure(size=max(text_font.cget("size"), 14))
+        ui_size = tkfont.nametofont("TkDefaultFont").cget("size")
+        text_font = tkfont.nametofont("TkTextFont").copy()  # proportional, a touch larger than the UI
+        text_font.configure(size=ui_size + (1 if ui_size > 0 else -1))  # negative sizes are pixels
         self.summary = tk.Text(out, wrap="word", font=text_font, height=1, undo=False, relief="flat",
                                background=self._background())
         self._make_read_only(self.summary)
