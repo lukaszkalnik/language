@@ -1,0 +1,55 @@
+# Builds the desktop app (Language.app in a .dmg, Language.exe) and publishes a GitHub release.
+# Push a tag v<gui version> (see tools/gui/src/gui/__init__.py) to release; run it by hand
+# (workflow_dispatch) to build without releasing.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.8"
+      - name: Unit tests
+        run: uv run pytest -q
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          ver=$(sed -n 's/__version__ = "\(.*\)"/\1/p' tools/gui/src/gui/__init__.py)
+          test "v$ver" = "$GITHUB_REF_NAME" || { echo "error: tag $GITHUB_REF_NAME != v$ver"; exit 1; }
+      - name: Build
+        run: uv run --no-project --python 3.12 --with "pyinstaller>=6.11,<7" --with pillow python tools/gui/packaging/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Language $GITHUB_REF_NAME" --notes-file tools/gui/packaging/RELEASE_NOTES.md
