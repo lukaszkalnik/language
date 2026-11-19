@@ -1,7 +1,7 @@
 # Working on this repository
 
 - Work directly on `main`; no feature branches.
-- Commit after every atomic change (one logical change per commit, tests passing), and push.
+- Commit after every atomic change (one logical change per commit: parts that only make sense together; separate fixes are separate commits; tests passing), and push.
 - `uv run pytest` at the root runs all unit tests (no network, no models); keep it green.
   Integration tests: `uv run --package <tool> pytest -m integration tools/<tool>`.
 - `uv run ruff check .` before committing.
