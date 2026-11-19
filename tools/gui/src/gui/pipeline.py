@@ -30,7 +30,18 @@ LANGUAGES = {
     "zh": "Chinese", "vi": "Vietnamese", "id": "Indonesian",
 }
 
-_LANGUAGE_LINE = re.compile(r"^Language:\s*([a-z]{2,3})\b", re.MULTILINE)
+_LANGUAGE_LINE = re.compile(r"^Language:\s*([a-z]{2,3})\b(?:\s*\((\d+%)\))?(?:;\s*also found:\s*(.*))?",
+                            re.MULTILINE)
+# Names for languages Whisper detects beyond the translation targets.
+EXTRA_NAMES = {
+    "af": "Afrikaans", "be": "Belarusian", "bg": "Bulgarian", "bn": "Bengali", "br": "Breton",
+    "bs": "Bosnian", "ca": "Catalan", "cy": "Welsh", "et": "Estonian", "eu": "Basque", "fa": "Persian",
+    "fo": "Faroese", "ga": "Irish", "gl": "Galician", "hr": "Croatian", "hy": "Armenian", "is": "Icelandic",
+    "ka": "Georgian", "kk": "Kazakh", "la": "Latin", "lb": "Luxembourgish", "lt": "Lithuanian",
+    "lv": "Latvian", "mk": "Macedonian", "ms": "Malay", "mt": "Maltese", "oc": "Occitan", "sl": "Slovenian",
+    "sq": "Albanian", "sr": "Serbian", "sw": "Swahili", "ta": "Tamil", "th": "Thai", "tl": "Tagalog",
+    "ur": "Urdu", "yi": "Yiddish", "yo": "Yoruba", "yue": "Cantonese",
+}
 
 
 LLM_MODEL = "gemma4:12b"  # translate's default Ollama model
@@ -75,6 +86,7 @@ class Options:
 @dataclass
 class Result:
     transcript: str = ""
+    language: str = ""  # as describe_language() puts it
     translation: str = ""
     accent: str = ""
     notes: list[str] = field(default_factory=list)
@@ -104,10 +116,32 @@ def tool_command(name: str, which: Callable[[str], str | None] = shutil.which,
     raise StepFailed(f"{name} is not installed; run: uv tool install --editable ./tools/{name}")
 
 
+def language_name(code: str) -> str:
+    return LANGUAGES.get(code) or EXTRA_NAMES.get(code) or code
+
+
 def detected_language(stderr: str) -> str | None:
     """The main language transcribe reports on stderr ("Language: en (97%)")."""
     m = _LANGUAGE_LINE.search(stderr)
     return m.group(1) if m else None
+
+
+def describe_language(line: str) -> str | None:
+    """A transcribe language line for people: "English (en, 97%); also German (de, 3%)"."""
+    m = _LANGUAGE_LINE.search(line)
+    if not m:
+        return None
+    code, share, others = m.groups()
+    text = f"{language_name(code)} ({code}{', ' + share if share else ''})"
+    if others:
+        named = []
+        for part in others.split(","):
+            o = re.match(r"\s*([a-z]{2,3})\s*(?:\((\d+%)\))?", part)
+            if o:
+                named.append(f"{language_name(o.group(1))} ({o.group(1)}{', ' + o.group(2) if o.group(2) else ''})")
+        if named:
+            text += "; also " + ", ".join(named)
+    return text
 
 
 def last_error(stderr: str) -> str:
@@ -135,12 +169,41 @@ def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
     return steps
 
 
-class Runner:
-    """Runs a plan, one process at a time, reporting stderr lines; `cancel()` stops it."""
+STEP_TITLES = {
+    "vocals": "Separating the vocals",
+    "transcribe": "Transcribing",
+    "translate": "Translating",
+    "accent": "Recognising the accent",
+}
+_PROGRESS_LINE = re.compile(r"^@progress\s+([0-9.]+)\s*(.*)$")
+_TQDM_LINE = re.compile(r"^(.*?)\s*(\d{1,3})%\|")  # tqdm bars, e.g. model downloads
 
-    def __init__(self, on_status: Callable[[str], None] = lambda s: None,
+
+def parse_line(line: str) -> tuple[str, object] | None:
+    """One stderr line as an event: ("progress", (fraction, label or None)) or ("status", text)."""
+    text = line.strip()
+    if not text:
+        return None
+    m = _PROGRESS_LINE.match(text)
+    if m:
+        return "progress", (min(1.0, float(m.group(1))), m.group(2) or None)
+    m = _TQDM_LINE.match(text)
+    if m:
+        label = m.group(1).rstrip(":").strip()
+        return "progress", (int(m.group(2)) / 100, f"Downloading {label}" if "." in label else (label or None))
+    return "status", text
+
+
+class Runner:
+    """Runs a plan, one process at a time, reporting events; `cancel()` stops it.
+
+    on_event gets ("step", (index, count, title)), ("status", text) for a stderr line, and
+    ("progress", (fraction, label)) from the tools' `@progress` lines and tqdm bars.
+    """
+
+    def __init__(self, on_event: Callable[[str, object], None] = lambda kind, value: None,
                  command: Callable[[str], list[str]] = tool_command):
-        self.on_status = on_status
+        self.on_event = on_event
         self.command = command
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
@@ -153,8 +216,8 @@ class Runner:
     def _run(self, tool: str, args: list[str], stdin: str | None = None) -> tuple[str, str]:
         if self._cancelled:
             raise Cancelled
-        self.on_status(f"{tool}: starting...")
         env = setup.tool_env()
+        env["LANGUAGE_PROGRESS"] = "1"
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self._proc = subprocess.Popen(
             self.command(tool) + args, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
@@ -173,12 +236,16 @@ class Runner:
         reader = threading.Thread(target=lambda: out_chunks.append(self._proc.stdout.read()), daemon=True)
         reader.start()
         err_lines = []
-        for line in self._proc.stderr:
-            err_lines.append(line)
-            # progress bars redraw with \r; show the latest state
-            text = line.rstrip("\n").split("\r")[-1].strip()
-            if text:
-                self.on_status(f"{tool}: {text}")
+        for line in self._proc.stderr:  # text mode turns progress bars' \r into line breaks
+            event = parse_line(line)
+            if event is None:
+                continue
+            if event[0] == "status":
+                err_lines.append(line)
+                found = describe_language(event[1]) if tool == "transcribe" else None
+                if found:
+                    self.on_event("language", found)
+            self.on_event(*event)
         self._proc.wait()
         reader.join()
         stderr = "".join(err_lines)
@@ -198,11 +265,14 @@ class Runner:
                 backend = translator(ollama_models())
                 if backend == "nllb":
                     result.notes.append(NLLB_NOTE.format(model=LLM_MODEL))
-            for tool, args in plan(opts, backend):
+            steps = plan(opts, backend)
+            for index, (tool, args) in enumerate(steps, 1):
                 args = [vocals if a == "{vocals}" else a for a in args]
+                self.on_event("step", (index, len(steps), STEP_TITLES.get(tool, tool)))
                 if tool == "transcribe":
                     result.transcript, err = self._run(tool, args)
                     language = detected_language(err)
+                    result.language = describe_language(err) or ""
                     if not result.transcript.strip():
                         result.notes.append("No speech or singing found.")
                         break
@@ -210,7 +280,7 @@ class Runner:
                     result.translation, _ = self._run(tool, args, stdin=result.transcript)
                 elif tool == "accent":
                     if language and language != "en":
-                        name = LANGUAGES.get(language, language)
+                        name = language_name(language)
                         result.notes.append(f"Accent recognition skipped: works for English only, this is {name}.")
                         continue
                     result.accent, _ = self._run(tool, args)
@@ -221,6 +291,8 @@ class Runner:
 
 def format_result(result: Result) -> str:
     parts = []
+    if result.language:
+        parts.append("LANGUAGE\n" + result.language)
     if result.accent.strip():
         parts.append("ACCENT\n" + result.accent.strip())
     if result.translation.strip():

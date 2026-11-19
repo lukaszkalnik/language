@@ -128,7 +128,8 @@ def install_ffmpeg(path: str) -> Path:
     return target
 
 
-def run_setup(on_status: Callable[[str], None]) -> None:
+def run_setup(on_status: Callable[[str], None],
+              on_step: Callable[[int, int, str], None] = lambda i, n, title: None) -> None:
     """Install everything. Safe to run again after a failure or an update."""
     uv = uv_binary()
     src = data_dir() / "src"
@@ -138,7 +139,9 @@ def run_setup(on_status: Callable[[str], None]) -> None:
     shutil.copytree(bundle_dir() / "src", src)
     env = tool_env()
     flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-    for what, cmd in commands(uv, src):
+    steps = commands(uv, src)
+    for index, (what, cmd) in enumerate(steps, 1):
+        on_step(index, len(steps), what)
         on_status(f"{what}...")
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                 encoding="utf-8", errors="replace", env=env, creationflags=flags)
@@ -146,7 +149,7 @@ def run_setup(on_status: Callable[[str], None]) -> None:
         for line in proc.stdout:
             lines.append(line.strip())
             if line.strip():
-                on_status(f"{what}: {line.strip()}")
+                on_status(line.strip())
         if proc.wait() != 0:
             tail = next((ln for ln in reversed(lines) if ln), "no output")
             raise RuntimeError(f"{what} failed: {tail}")

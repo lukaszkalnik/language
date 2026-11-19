@@ -5,6 +5,7 @@ from __future__ import annotations
 import queue
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
@@ -61,9 +62,26 @@ class App:
         self.stop_button.pack(side="left", padx=PAD)
         ttk.Button(buttons, text="Copy all", command=self.copy_all).pack(side="left")
 
+        busy = ttk.Frame(frame)
+        busy.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(PAD, 4))
+        busy.columnconfigure(0, weight=1)
+        self.step_text = tk.StringVar()
+        self.clock = tk.StringVar()
+        bold = tkfont.nametofont("TkDefaultFont").copy()
+        bold.configure(weight="bold")
+        ttk.Label(busy, textvariable=self.step_text, font=bold).grid(row=0, column=0, sticky="w")
+        ttk.Label(busy, textvariable=self.clock, foreground="gray").grid(row=0, column=1, sticky="e")
+        self.bar = ttk.Progressbar(busy, mode="determinate", maximum=100)
+        self.bar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=2)
         self.status = tk.StringVar(value="Paste a YouTube URL (or a file path) and press Run.")
-        ttk.Label(frame, textvariable=self.status, foreground="gray").grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=(PAD, 4))
+        ttk.Label(busy, textvariable=self.status, foreground="gray").grid(row=2, column=0, sticky="w")
+        self.found_language = tk.StringVar()
+        ttk.Label(busy, textvariable=self.found_language).grid(row=2, column=1, sticky="e")
+        self._busy = False
+        self._run_started = self._step_started = 0.0
+        self._last_progress = 0.0
+        self._last_status = ""
+        self._phase: tuple[str | None, float, float] | None = None  # label, start time, start fraction
 
         out = ttk.Frame(frame)
         out.grid(row=4, column=0, columnspan=2, sticky="nsew")
@@ -82,6 +100,7 @@ class App:
 
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.after(100, self._poll)
+        root.after(1000, self._tick)
         self._set_icon()
         if setup.needed():
             self._set_output(setup.INTRO.format(folder=setup.data_dir()))
@@ -99,12 +118,14 @@ class App:
 
     def start_setup(self) -> None:
         self.run_button.configure(state="disabled")
+        self._start_busy()
         self._set_output(setup.INTRO.format(folder=setup.data_dir()).rsplit("Press", 1)[0]
                          + "Installing... the status line below shows progress.\n")
 
         def work():
             try:
-                setup.run_setup(lambda s: self.events.put(("status", s)))
+                setup.run_setup(lambda s: self.events.put(("status", s)),
+                                lambda i, n, title: self.events.put(("step", (i, n, title))))
                 self.events.put(("setup-done", None))
             except Exception as exc:  # noqa: BLE001 - shown in the window
                 self.events.put(("setup-failed", str(exc)))
@@ -163,7 +184,9 @@ class App:
         self._set_output("")
         self.run_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
-        self.runner = Runner(on_status=lambda s: self.events.put(("status", s)))
+        self._start_busy()
+        self.found_language.set("")
+        self.runner = Runner(on_event=lambda kind, value: self.events.put((kind, value)))
         runner = self.runner
 
         def work():
@@ -193,13 +216,85 @@ class App:
             self.runner.cancel()
         self.root.destroy()
 
+    # -- progress: step, bar (determinate with a percentage, animated without), clock ----------
+    def _start_busy(self) -> None:
+        self._busy = True
+        self._run_started = self._step_started = time.monotonic()
+        self.step_text.set("Starting...")
+        self.clock.set("0:00")
+        self._indeterminate()
+
+    def _stop_busy(self, kind: str) -> None:
+        self._busy = False
+        self.bar.stop()
+        self.bar.configure(mode="determinate", value=100 if kind in ("done", "setup-done") else 0)
+        took = _clock(time.monotonic() - self._run_started)
+        self.step_text.set({"done": "Finished", "setup-done": "Set up finished",
+                            "stopped": "Stopped"}.get(kind, "Failed"))
+        self.clock.set(f"took {took}")
+
+    def _indeterminate(self) -> None:
+        self._phase = None
+        if str(self.bar.cget("mode")) != "indeterminate":
+            self.bar.configure(mode="indeterminate", value=0)
+            self.bar.start(15)
+
+    def _on_step(self, index: int, count: int, title: str) -> None:
+        self.step_text.set(f"Step {index} of {count} · {title}")
+        self._step_started = time.monotonic()
+        self._last_status = ""
+        self.status.set(f"{title}...")
+        self._indeterminate()
+
+    def _on_status(self, text: str) -> None:
+        self._last_status = text
+        self.status.set(text[:200])
+        # a new message starts a new phase, unless it is a progress line's text twin
+        if time.monotonic() - self._last_progress > 3:
+            self._indeterminate()
+
+    def _on_progress(self, fraction: float, label: str | None) -> None:
+        now = time.monotonic()
+        self._last_progress = now
+        if str(self.bar.cget("mode")) != "determinate":
+            self.bar.stop()
+            self.bar.configure(mode="determinate")
+        if self._phase is None or self._phase[0] != label or fraction < self._phase[2]:
+            self._phase = (label, now, fraction)
+        self.bar.configure(value=fraction * 100)
+        base = label or self._last_status.rstrip(". ") or "Working"
+        text = f"{base} — {fraction:.0%}"
+        _, t0, f0 = self._phase
+        if now - t0 > 5 and fraction - f0 > 0.02 and fraction < 1:
+            left = (now - t0) / (fraction - f0) * (1 - fraction)
+            text += f" · about {_clock(left)} left"
+        self.status.set(text[:200])
+
+    def _tick(self) -> None:
+        if self._busy:
+            now = time.monotonic()
+            step = _clock(now - self._step_started)
+            total = _clock(now - self._run_started)
+            self.clock.set(step if step == total else f"{step} · total {total}")
+        self.root.after(1000, self._tick)
+
     def _poll(self) -> None:
         try:
             while True:
                 kind, value = self.events.get_nowait()
                 if kind == "status":
-                    self.status.set(value[:200])
+                    self._on_status(value)
                     continue
+                if kind == "step":
+                    self._on_step(*value)
+                    continue
+                if kind == "language":
+                    self.found_language.set(f"Language: {value}")
+                    continue
+                if kind == "progress":
+                    self._on_progress(*value)
+                    continue
+                self._stop_busy(kind)
                 if kind == "setup-done":
                     self.run_button.configure(text="Run", command=self.start, state="normal")
                     self._set_output("Ready. Paste a URL and press Run.\n\nThe first run of each feature "
@@ -226,6 +321,11 @@ class App:
         except queue.Empty:
             pass
         self.root.after(100, self._poll)
+
+
+def _clock(seconds: float) -> str:
+    s = int(max(0, seconds))
+    return f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
 
 
 def main() -> int:
