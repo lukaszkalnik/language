@@ -6,6 +6,7 @@ import argparse
 import os
 import socket
 import sys
+import threading
 import time
 from collections.abc import Callable
 
@@ -83,12 +84,75 @@ def force_ipv4() -> None:
     socket.getaddrinfo = patched
 
 
+PROBE_HOST = "huggingface.co"  # where models come from; also reachable over both IP versions
+PROBE_TIMEOUT = 1.5
+
+
+def can_connect(family: int, host: str = PROBE_HOST, port: int = 443, timeout: float = PROBE_TIMEOUT) -> bool | None:
+    """Whether a TCP connection over this IP version works; None if the host has no such address."""
+    try:
+        infos = _original_getaddrinfo(host, port, family, socket.SOCK_STREAM)
+    except OSError:
+        return None
+    if not infos:
+        return None
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.connect(infos[0][-1])
+            return True
+    except OSError:
+        return False
+
+
+def ipv6_broken(probe: Callable[[int], bool | None] = can_connect, deadline: float = PROBE_TIMEOUT + 0.3) -> bool:
+    """True when IPv4 connects but IPv6 does not (e.g. a router advertising a stale IPv6 prefix).
+
+    Both are tried at once, so a working network pays one round trip and a broken one about
+    PROBE_TIMEOUT seconds. Offline, or with no IPv6 address at all, nothing is changed.
+    """
+    results: dict[int, bool | None] = {}
+
+    def run_probe(family):
+        results[family] = probe(family)
+
+    threads = [threading.Thread(target=run_probe, args=(f,), daemon=True) for f in (socket.AF_INET6, socket.AF_INET)]
+    for t in threads:
+        t.start()
+    end = time.monotonic() + deadline
+    for t in threads:
+        t.join(max(0.0, end - time.monotonic()))
+    return results.get(socket.AF_INET) is True and results.get(socket.AF_INET6, False) is False
+
+
+_ip_decision: bool | None = None
+
+
+def choose_ipv4(requested: bool = False) -> bool:
+    """Use IPv4 only when asked (--ipv4, LANGUAGE_IPV4=1) or when IPv6 turns out to be broken.
+
+    LANGUAGE_IPV4=0 skips the check. Decided once per process; forces IPv4 for every library.
+    """
+    global _ip_decision
+    if _ip_decision is None:
+        env = os.environ.get("LANGUAGE_IPV4")
+        if requested or env == "1":
+            _ip_decision = True
+        elif env == "0":
+            _ip_decision = False
+        else:
+            _ip_decision = ipv6_broken()
+            if _ip_decision:
+                status("IPv6 is not working on this network; using IPv4 (LANGUAGE_IPV4=0 to turn this off).")
+        if _ip_decision:
+            force_ipv4()
+    return _ip_decision
+
+
 def apply_common(args: argparse.Namespace) -> None:
     if getattr(args, "cache_dir", None):
         cache.set_cache_root(args.cache_dir)
-    args.ipv4 = getattr(args, "ipv4", False) or os.environ.get("LANGUAGE_IPV4") == "1"
-    if args.ipv4:
-        force_ipv4()
+    args.ipv4 = choose_ipv4(getattr(args, "ipv4", False))
 
 
 def run(main: Callable[[], int | None], prog: str) -> int:

@@ -48,7 +48,11 @@ def read_input(arg: str) -> str:
 
 def make_translator(args):
     if args.translator == "nllb":
+        from ingest.cli import choose_ipv4
+
         from .nllb import NLLBTranslator
+
+        choose_ipv4()  # NLLB comes from the Hugging Face Hub; Ollama is local
 
         return NLLBTranslator(args.nllb_model, args.device)
     from .llm import DEFAULT_MODEL, OllamaTranslator
