@@ -25,7 +25,19 @@ through French). The window lists Breton where it is supported.
   [`lgrobol/m2m100_418M_br_fr`](https://huggingface.co/lgrobol/m2m100_418M_br_fr).
   Open: NLLB-200's Breton coverage; whether the Ollama model handles Breton acceptably.
 - Check each model's licence and size.
+- **Language detection**: transcribe picks the language with Whisper large-v3 on up to 8 windows
+  (`tools/transcribe/src/transcribe/langdetect.py`, no allow-list), so it can report `br`, but
+  Whisper saw little Breton in training and will likely answer French (or Welsh, Cornish) instead,
+  then transcribe as that language. Untested so far.
+  1. Measure first: run several Breton clips (Common Voice `br`) through transcribe and record
+     what it detects.
+  2. Second opinion from a dedicated language-ID model when Whisper says `fr`, `cy` or `kw`:
+     SpeechBrain VoxLingua107 ECAPA (`speechbrain/lang-id-voxlingua107-ecapa`; SpeechBrain is
+     already used by accent) or Meta MMS-LID (`facebook/mms-lid-*`). Verify both list Breton.
+  3. Manual choice in the window: a "Spoken language: Auto / Breton / …" selector that passes
+     `--language xx` to transcribe (the option exists; the window has no way to set it).
 
 ## Done when
-A Breton clip (Common Voice `br`, or a YouTube video in Breton) transcribes with the new backend
+Breton clips are detected as Breton (or Breton is chosen in the window), and a Breton clip
+(Common Voice `br`, or a YouTube video in Breton) transcribes with the new backend
 and translates to French and English; unit tests for the new code; READMEs list the models.
