@@ -119,6 +119,25 @@ def open_input(
     return Source("file", path, f"file-{cache.file_hash(path)}", start or 0.0, end, start, end, label=path.name)
 
 
+def input_info(arg: str, use_cache: bool = True, ipv4: bool = False) -> dict:
+    """Title and duration of an input without downloading or decoding it (`--info`).
+
+    YouTube: yt-dlp metadata only (cached with the downloads); files: ffprobe (or ffmpeg).
+    `duration` is None when it is not known.
+    """
+    if arg == "-":
+        raise AudioError("--info needs a file or a URL, not a stream on stdin")
+    if youtube.looks_like_url(arg):
+        info = youtube.video_info(arg, cache.cache_dir("downloads"), use_cache, ipv4)
+        return {"type": "youtube", "id": info.id, "url": youtube.watch_url(info.id), "title": info.title,
+                "channel": info.channel, "duration": info.duration}
+    path = Path(arg).expanduser()
+    if not path.is_file():
+        raise AudioError(f"file not found: {arg}")
+    audio.require_ffmpeg()
+    return {"type": "file", "path": str(path), "title": path.name, "duration": audio.probe(path).duration}
+
+
 # --- audio output convention ----------------------------------------------------------
 
 def audio_destination(output: str | None, stdout_isatty: bool, default_name: str) -> Path | None:

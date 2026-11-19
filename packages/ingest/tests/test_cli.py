@@ -74,3 +74,56 @@ def test_choose_ipv4_env_overrides(monkeypatch):
         monkeypatch.setattr(cli, "_ip_decision", None)
         monkeypatch.setenv("LANGUAGE_IPV4", env)
         assert cli.choose_ipv4(requested) is expected
+
+
+def _info_args(argv):
+    import argparse
+
+    from ingest.cli import add_input_args
+
+    parser = argparse.ArgumentParser(prog="tool")
+    add_input_args(parser)
+    return parser.parse_args(argv)
+
+
+def test_info_prints_json_and_exits(monkeypatch, capsys, tmp_path):
+    import json
+
+    import pytest
+
+    from ingest import cli, source
+
+    monkeypatch.setenv("LANGUAGE_IPV4", "0")
+    seen = {}
+
+    def fake_info(arg, use_cache=True, ipv4=False):
+        seen.update(arg=arg, use_cache=use_cache)
+        return {"type": "file", "path": arg, "title": "a.mp3", "duration": 61.5}
+
+    monkeypatch.setattr(source, "input_info", fake_info)
+    with pytest.raises(SystemExit) as exc:
+        cli.apply_common(_info_args(["a.mp3", "--info", "--no-cache"]))
+    assert exc.value.code == 0
+    assert json.loads(capsys.readouterr().out) == {"type": "file", "path": "a.mp3", "title": "a.mp3", "duration": 61.5}
+    assert seen == {"arg": "a.mp3", "use_cache": False}
+
+
+def test_info_error_is_one_line(monkeypatch, capsys):
+    import pytest
+
+    from ingest import cli
+
+    monkeypatch.setenv("LANGUAGE_IPV4", "0")
+    with pytest.raises(SystemExit) as exc:
+        cli.apply_common(_info_args(["-", "--info"]))
+    assert exc.value.code == 1
+    assert capsys.readouterr().err == "tool: error: --info needs a file or a URL, not a stream on stdin\n"
+
+
+def test_without_info_apply_common_returns(monkeypatch):
+    from ingest import cli
+
+    monkeypatch.setenv("LANGUAGE_IPV4", "0")
+    args = _info_args(["a.mp3"])
+    cli.apply_common(args)
+    assert args.info is False

@@ -39,6 +39,8 @@ accent "https://www.youtube.com/watch?v=QXX-uwQ-VGw"
   IPv6 works (one connection attempt, at most ~1.5 s); if only IPv4 connects, as on a router
   advertising a stale IPv6 prefix, it uses IPv4 and says so. `--ipv4` (or `LANGUAGE_IPV4=1`)
   forces IPv4; `LANGUAGE_IPV4=0` skips the check.
+- `--info` prints the input's title and duration as JSON and exits, without downloading the
+  audio or loading a model (YouTube metadata only; files through ffprobe).
 - The download size is printed the first time a model is fetched.
 
 ## Install

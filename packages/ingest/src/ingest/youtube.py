@@ -244,6 +244,38 @@ def check_single_finished_video(raw: dict) -> None:
         raise YouTubeError("Live streams and upcoming premieres are not supported; pass a finished video.")
 
 
+def _metadata(video_id: str, cache_dir: Path, use_cache: bool, ipv4: bool) -> tuple[VideoInfo, dict | None]:
+    """The video's info (cached next to the downloads) and yt-dlp's raw result when it was asked."""
+    import yt_dlp
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    info_file = cache_dir / f"{video_id}.info.json"
+    if use_cache and info_file.exists():
+        try:
+            return VideoInfo(**json.loads(info_file.read_text(encoding="utf-8"))), None
+        except (ValueError, TypeError):
+            pass
+    with yt_dlp.YoutubeDL(_ydl_options(ipv4, format="bestaudio")) as ydl:
+        raw = ydl.extract_info(watch_url(video_id), download=False)
+    check_single_finished_video(raw)
+    info = _to_video_info(raw, video_id)
+    info_file.write_text(json.dumps(asdict(info)), encoding="utf-8")
+    return info, raw
+
+
+def video_info(url: str, cache_dir: Path, use_cache: bool = True, ipv4: bool = False) -> VideoInfo:
+    """Title, channel and duration only (no download); for `--info`."""
+    import yt_dlp
+
+    video_id = parse_video_id(url)
+    try:
+        return _metadata(video_id, cache_dir, use_cache, ipv4)[0]
+    except YouTubeError:
+        raise
+    except yt_dlp.utils.YoutubeDLError as exc:
+        raise YouTubeError(explain_error(str(exc))) from None
+
+
 def fetch(
     url: str,
     cache_dir: Path,
@@ -263,24 +295,8 @@ def _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info) -> Downloa
     from yt_dlp.utils import download_range_func
 
     video_id = parse_video_id(url)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    info_file = cache_dir / f"{video_id}.info.json"
-
-    raw = None
-    info = None
-    if use_cache and info_file.exists():
-        try:
-            info = VideoInfo(**json.loads(info_file.read_text(encoding="utf-8")))
-        except (ValueError, TypeError):
-            info = None
     try:
-        if info is None:
-            with yt_dlp.YoutubeDL(_ydl_options(ipv4, format="bestaudio")) as ydl:
-                raw = ydl.extract_info(watch_url(video_id), download=False)
-            check_single_finished_video(raw)
-            info = _to_video_info(raw, video_id)
-            info_file.write_text(json.dumps(asdict(info)), encoding="utf-8")
-
+        info, raw = _metadata(video_id, cache_dir, use_cache, ipv4)
         begin, finish, capped = plan_range(start, end, info.duration, cap)
         if on_info is not None:
             on_info(info, begin, finish, capped)  # lets the tool show the title before downloading

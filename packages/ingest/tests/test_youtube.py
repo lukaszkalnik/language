@@ -181,3 +181,14 @@ def test_full_download_preferred_when_faster():
     assert not prefer_full_download(0, 900, 5 * 3600)  # never fetch very long videos in full
     assert not prefer_full_download(0, 900, None)  # unknown duration
     assert not prefer_full_download(0, 900, 7403, sections_only=True)
+
+
+def test_video_info_comes_from_the_cache_without_network(tmp_path):
+    import json
+
+    from ingest import youtube
+
+    (tmp_path / "dQw4w9WgXcQ.info.json").write_text(json.dumps(
+        {"id": "dQw4w9WgXcQ", "title": "T", "channel": "C", "duration": 212.0}))
+    info = youtube.video_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5", tmp_path)
+    assert (info.title, info.duration) == ("T", 212.0)

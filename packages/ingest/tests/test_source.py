@@ -141,3 +141,33 @@ def test_wav_tags_of_untagged_and_non_wav(tmp_path):
     other = tmp_path / "x.mp3"
     other.write_bytes(b"ID3....")
     assert audio.read_wav_tags(other) == {}
+
+
+@needs_ffmpeg
+def test_input_info_of_a_file(tmp_path):
+    wav = tmp_path / "tone.wav"
+    audio.write_wav(wav, _sine(2.0), 8000)
+    info = source.input_info(str(wav))
+    assert info["type"] == "file" and info["title"] == "tone.wav"
+    assert abs(info["duration"] - 2.0) < 0.05
+
+
+def test_input_info_missing_file():
+    with pytest.raises(AudioError, match="file not found"):
+        source.input_info("/no/such/file.mp3")
+
+
+def test_input_info_of_a_video_uses_metadata_only(monkeypatch):
+    from ingest import youtube
+
+    calls = []
+
+    def fake(url, cache_dir, use_cache=True, ipv4=False):
+        calls.append(url)
+        return youtube.VideoInfo("dQw4w9WgXcQ", "Title", "Channel", 212.0)
+
+    monkeypatch.setattr(youtube, "video_info", fake)
+    info = source.input_info("https://youtu.be/dQw4w9WgXcQ")
+    assert info == {"type": "youtube", "id": "dQw4w9WgXcQ", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "title": "Title", "channel": "Channel", "duration": 212.0}
+    assert calls == ["https://youtu.be/dQw4w9WgXcQ"]

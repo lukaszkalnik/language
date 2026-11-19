@@ -13,6 +13,9 @@ Shared library used by every tool in this repository (no command line of its own
   Playlists, live streams and premieres are rejected; private, age-restricted, region-blocked,
   removed videos and network failures give one readable line.
 - **Time ranges**: `--start` / `--end` in seconds, `mm:ss` or `hh:mm:ss`.
+- **`--info`**: prints `{"type", "title", "duration", ...}` as JSON on stdout and exits before
+  any download or model (YouTube: yt-dlp metadata, cached with the downloads; files: ffprobe).
+  The desktop window uses it to size its time-range slider.
 - **Cache**: one folder for all tools (`~/.cache/language`, or `--cache-dir` / `LANGUAGE_CACHE`),
   keyed by video ID or file hash plus time range (plus tool settings for derived audio).
 - **Audio**: ffmpeg detection with an install hint, conversion that keeps the source sample

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import socket
 import sys
@@ -59,6 +60,9 @@ def add_input_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-cache", action="store_true", help="ignore cached downloads and results; compute again")
     parser.add_argument("--cache-dir", metavar="DIR", help=f"shared cache folder (default: {cache.cache_root()}; or set {cache.ENV_VAR})")
     parser.add_argument("--ipv4", action="store_true", help="use IPv4 only for downloads, e.g. on a network with broken IPv6 (or set LANGUAGE_IPV4=1)")
+    parser.add_argument("--info", action="store_true",
+                        help="only print the input's title and duration as JSON and exit (no download, no model)")
+    parser.set_defaults(info_prog=parser.prog)
 
 
 def order_addresses(results: list, ipv4_only: bool = False) -> list:
@@ -153,6 +157,16 @@ def apply_common(args: argparse.Namespace) -> None:
     if getattr(args, "cache_dir", None):
         cache.set_cache_root(args.cache_dir)
     args.ipv4 = choose_ipv4(getattr(args, "ipv4", False))
+    if getattr(args, "info", False):
+        sys.exit(run(lambda: print_info(args), getattr(args, "info_prog", "language")))
+
+
+def print_info(args: argparse.Namespace) -> None:
+    """--info: the input's title and duration as one JSON line on stdout."""
+    from .source import input_info  # here: source imports youtube, which imports this module
+
+    info = input_info(args.input, use_cache=not getattr(args, "no_cache", False), ipv4=args.ipv4)
+    print(json.dumps(info, ensure_ascii=False), flush=True)
 
 
 def run(main: Callable[[], int | None], prog: str) -> int:
