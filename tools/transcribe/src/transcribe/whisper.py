@@ -9,7 +9,7 @@ import numpy as np
 
 from ingest.cli import progress_wanted, report_progress
 from ingest.errors import ModelError
-from ingest.models import announce_hf_download, quiet_libraries
+from ingest.models import announce_hf_download, hf_local_path, quiet_libraries
 
 from .segments import Segment, Word
 
@@ -60,7 +60,8 @@ class MLXWhisper:
         from mlx_whisper.transcribe import ModelHolder
 
         try:
-            self.model = ModelHolder.get_model(self.repo, mx.float16)
+            self.path = hf_local_path(self.repo)  # transcribe() must pass the same key to reuse it
+            self.model = ModelHolder.get_model(self.path, mx.float16)
         except Exception as exc:
             raise ModelError(f"could not load {self.repo} ({exc.__class__.__name__}: {exc})") from None
 
@@ -81,7 +82,7 @@ class MLXWhisper:
 
         clip = "0" if not clips else [t for pair in clips for t in pair]
         result = mlx_whisper.transcribe(
-            audio.astype(np.float32), path_or_hf_repo=self.repo, language=language,
+            audio.astype(np.float32), path_or_hf_repo=self.path, language=language,
             # verbose=False draws mlx-whisper's tqdm bar, which the desktop window reads as progress
             verbose=False if show_progress and progress_wanted() else None,
             clip_timestamps=clip, initial_prompt=prompt, **DECODE,
@@ -100,7 +101,9 @@ class FasterWhisper:
 
         compute = "float16" if device == "cuda" else "int8"
         try:
-            self.model = WhisperModel(FASTER_MODELS[model], device="cuda" if device == "cuda" else "cpu", compute_type=compute)
+            local = hf_local_path(FASTER_REPOS[model])
+            source = local if local != FASTER_REPOS[model] else FASTER_MODELS[model]
+            self.model = WhisperModel(source, device="cuda" if device == "cuda" else "cpu", compute_type=compute)
         except Exception as exc:
             raise ModelError(f"could not load Whisper {model} ({exc.__class__.__name__}: {exc})") from None
 

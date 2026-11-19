@@ -37,6 +37,20 @@ def hf_is_cached(repo_id: str, filename: str | None = None) -> bool:
         return False
 
 
+def hf_local_path(repo_id: str) -> str:
+    """The local snapshot folder of a cached repo, else the repo ID.
+
+    Libraries given a repo ID ask the Hub for its latest revision even when the files are
+    cached; on a network with broken IPv6 that request hangs for minutes. A local path skips it.
+    """
+    from huggingface_hub import snapshot_download
+
+    try:
+        return snapshot_download(repo_id, local_files_only=True)
+    except Exception:
+        return repo_id
+
+
 def hf_repo_size(repo_id: str, patterns: list[str] | None = None) -> int | None:
     """Total size of the files a download will fetch (None if offline or unknown)."""
     try:

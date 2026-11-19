@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ingest.errors import ModelError
-from ingest.models import announce_hf_download, pick_device, quiet_libraries
+from ingest.models import announce_hf_download, hf_local_path, pick_device, quiet_libraries
 
 from . import languages
 from .chunks import Chunk
@@ -41,8 +41,9 @@ class NLLBTranslator:
         try:
             from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-            self.tokenizer = AutoTokenizer.from_pretrained(repo)
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(repo)
+            local = hf_local_path(repo)
+            self.tokenizer = AutoTokenizer.from_pretrained(local)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(local)
         except Exception as exc:
             raise ModelError(f"could not load {repo} ({exc.__class__.__name__}: {exc})") from None
         self.device = pick_device(device)

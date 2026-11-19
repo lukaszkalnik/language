@@ -159,6 +159,7 @@ def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bo
         status(f"Several languages found ({', '.join(allowed)}): labelling each passage separately.")
     total = sum(b - a for a, b in pieces)
     progress = Progress("Transcribing", total)
+    progress(0.0)  # the first piece can take a while (model warm-up); say what is happening
     done = 0.0
     segments: list[Segment] = []
     resumed = 0
