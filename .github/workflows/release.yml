@@ -52,4 +52,10 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Language $GITHUB_REF_NAME" --notes-file tools/gui/packaging/RELEASE_NOTES.md
+        run: |
+          # This version's CHANGELOG.md section, then how to download and install.
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v h="## $ver" '$0 == h {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "error: CHANGELOG.md has no section '## $ver'"; exit 1; }
+          { echo "## What's new"; cat notes.md; echo; cat tools/gui/packaging/RELEASE_NOTES.md; } > release-notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Language $GITHUB_REF_NAME" --notes-file release-notes.md

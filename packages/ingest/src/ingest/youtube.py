@@ -246,8 +246,6 @@ def check_single_finished_video(raw: dict) -> None:
 
 def _metadata(video_id: str, cache_dir: Path, use_cache: bool, ipv4: bool) -> tuple[VideoInfo, dict | None]:
     """The video's info (cached next to the downloads) and yt-dlp's raw result when it was asked."""
-    import yt_dlp
-
     cache_dir.mkdir(parents=True, exist_ok=True)
     info_file = cache_dir / f"{video_id}.info.json"
     if use_cache and info_file.exists():
@@ -255,6 +253,7 @@ def _metadata(video_id: str, cache_dir: Path, use_cache: bool, ipv4: bool) -> tu
             return VideoInfo(**json.loads(info_file.read_text(encoding="utf-8"))), None
         except (ValueError, TypeError):
             pass
+    import yt_dlp  # only when YouTube has to be asked: slow to import
     with yt_dlp.YoutubeDL(_ydl_options(ipv4, format="bestaudio")) as ydl:
         raw = ydl.extract_info(watch_url(video_id), download=False)
     check_single_finished_video(raw)
@@ -265,15 +264,17 @@ def _metadata(video_id: str, cache_dir: Path, use_cache: bool, ipv4: bool) -> tu
 
 def video_info(url: str, cache_dir: Path, use_cache: bool = True, ipv4: bool = False) -> VideoInfo:
     """Title, channel and duration only (no download); for `--info`."""
-    import yt_dlp
-
     video_id = parse_video_id(url)
     try:
         return _metadata(video_id, cache_dir, use_cache, ipv4)[0]
     except YouTubeError:
         raise
-    except yt_dlp.utils.YoutubeDLError as exc:
-        raise YouTubeError(explain_error(str(exc))) from None
+    except Exception as exc:
+        import yt_dlp
+
+        if isinstance(exc, yt_dlp.utils.YoutubeDLError):
+            raise YouTubeError(explain_error(str(exc))) from None
+        raise
 
 
 def fetch(

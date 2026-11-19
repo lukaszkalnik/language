@@ -2,15 +2,6 @@ Paste a YouTube link (or pick a file path), choose **Speech** or **Song**, optio
 **Range** and **Accent recognition**, press **Run**; then **Translate** the transcript into any
 listed language. Everything runs on your computer.
 
-## New in 0.3.0
-
-- **Range**: the length of a video or file appears on a slider as soon as it is pasted (nothing
-  is downloaded yet). Pick a part, e.g. 1:00–2:00 of a two-hour podcast, and only that part is
-  downloaded and processed; timestamps still match the video.
-- **Translate afterwards**: translate the transcript shown into a language, then into another,
-  without transcribing again. Transcript and translation are shown side by side.
-- The tools are set up again on the first start after the update (a few minutes).
-
 ## Download
 
 - **Mac** (Apple Silicon: M1 or newer): `Language-…-macos-arm64.dmg`

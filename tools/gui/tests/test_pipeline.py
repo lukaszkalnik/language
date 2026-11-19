@@ -44,7 +44,7 @@ FAKE = textwrap.dedent("""
 @pytest.fixture
 def fake(tmp_path: Path):
     script = tmp_path / "fake.py"
-    script.write_text(FAKE)
+    script.write_text(FAKE, encoding="utf-8")
     return lambda tool: [sys.executable, str(script), tool]
 
 
