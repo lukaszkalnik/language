@@ -5,6 +5,7 @@ Nothing here imports Tk or a model library, so it is unit-tested without a displ
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -12,9 +13,12 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from . import setup
 
 # Target languages offered in the selector (a subset of translate's ISO 639-1 codes).
 LANGUAGES = {
@@ -27,6 +31,29 @@ LANGUAGES = {
 }
 
 _LANGUAGE_LINE = re.compile(r"^Language:\s*([a-z]{2,3})\b", re.MULTILINE)
+
+
+LLM_MODEL = "gemma4:12b"  # translate's default Ollama model
+NLLB_NOTE = ("Translated offline with NLLB. For better translations install Ollama from "
+             "https://ollama.com and download the {model} model in it.")
+
+
+def ollama_models(host: str | None = None, timeout: float = 2) -> list[str] | None:
+    """Models in a running Ollama, or None when it is not running."""
+    host = host or os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+    url = (host if host.startswith("http") else f"http://{host}") + "/api/tags"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return [m.get("name", "") for m in json.load(resp).get("models", [])]
+    except (OSError, ValueError):
+        return None
+
+
+def translator(models: list[str] | None) -> str:
+    """The local LLM when Ollama runs with translate's model, else NLLB (no extra install)."""
+    if models and any(m == LLM_MODEL or m.startswith(LLM_MODEL + "-") for m in models):
+        return "llm"
+    return "nllb"
 
 
 class Cancelled(Exception):
@@ -63,7 +90,10 @@ def repo_root() -> Path | None:
 
 def tool_command(name: str, which: Callable[[str], str | None] = shutil.which,
                  root: Path | None = None) -> list[str]:
-    """How to start a tool: installed on PATH (`uv tool install`), else from the workspace with uv."""
+    """How to start a tool: installed by the app's setup, on PATH, else from the workspace with uv."""
+    own = setup.bin_dir() / f"{name}{setup.EXE}"
+    if which is shutil.which and own.is_file():
+        return [str(own)]
     found = which(name)
     if found:
         return [found]
@@ -89,7 +119,7 @@ def last_error(stderr: str) -> str:
     return lines[-1] if lines else "failed without a message"
 
 
-def plan(opts: Options) -> list[tuple[str, list[str]]]:
+def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
     """The steps (tool, arguments) for the options. `{audio}` is the transcribed/analysed audio."""
     steps: list[tuple[str, list[str]]] = []
     if opts.kind == "song":
@@ -98,7 +128,8 @@ def plan(opts: Options) -> list[tuple[str, list[str]]]:
     else:
         steps.append(("transcribe", [opts.url, "--mode", "speech"]))
     if opts.translate_to:
-        steps.append(("translate", ["-", "--to", opts.translate_to, "--width", "120"]))
+        steps.append(("translate", ["-", "--to", opts.translate_to, "--width", "120",
+                                    "--translator", translator]))
     if opts.accent:
         steps.append(("accent", ["{vocals}" if opts.kind == "song" else opts.url]))
     return steps
@@ -123,7 +154,7 @@ class Runner:
         if self._cancelled:
             raise Cancelled
         self.on_status(f"{tool}: starting...")
-        env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        env = setup.tool_env()
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self._proc = subprocess.Popen(
             self.command(tool) + args, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
@@ -162,7 +193,12 @@ class Runner:
         language = None
         with tempfile.TemporaryDirectory(prefix="language-gui-") as tmp:
             vocals = str(Path(tmp) / "vocals.wav")
-            for tool, args in plan(opts):
+            backend = "llm"
+            if opts.translate_to:
+                backend = translator(ollama_models())
+                if backend == "nllb":
+                    result.notes.append(NLLB_NOTE.format(model=LLM_MODEL))
+            for tool, args in plan(opts, backend):
                 args = [vocals if a == "{vocals}" else a for a in args]
                 if tool == "transcribe":
                     result.transcript, err = self._run(tool, args)

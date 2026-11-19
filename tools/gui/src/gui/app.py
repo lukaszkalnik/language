@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from . import setup
 from .pipeline import LANGUAGES, Cancelled, Options, Runner, StepFailed, format_result
 
 PAD = 8
@@ -81,6 +82,34 @@ class App:
 
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.after(100, self._poll)
+        self._set_icon()
+        if setup.needed():
+            self._set_output(setup.INTRO.format(folder=setup.data_dir()))
+            self.run_button.configure(text="Set up", command=self.start_setup)
+            self.status.set("First start: the tools need to be installed once.")
+
+    def _set_icon(self) -> None:
+        icon = setup.bundle_dir() / "icon.png"
+        if icon.is_file():
+            try:
+                self._icon = tk.PhotoImage(file=str(icon))
+                self.root.iconphoto(True, self._icon)
+            except tk.TclError:
+                pass
+
+    def start_setup(self) -> None:
+        self.run_button.configure(state="disabled")
+        self._set_output(setup.INTRO.format(folder=setup.data_dir()).rsplit("Press", 1)[0]
+                         + "Installing... the status line below shows progress.\n")
+
+        def work():
+            try:
+                setup.run_setup(lambda s: self.events.put(("status", s)))
+                self.events.put(("setup-done", None))
+            except Exception as exc:  # noqa: BLE001 - shown in the window
+                self.events.put(("setup-failed", str(exc)))
+
+        threading.Thread(target=work, daemon=True).start()
 
     # -- read-only text: selectable and copyable, but not editable --------------------------
     def _make_read_only(self, text: tk.Text) -> None:
@@ -170,6 +199,18 @@ class App:
                 kind, value = self.events.get_nowait()
                 if kind == "status":
                     self.status.set(value[:200])
+                    continue
+                if kind == "setup-done":
+                    self.run_button.configure(text="Run", command=self.start, state="normal")
+                    self._set_output("Ready. Paste a URL and press Run.\n\nThe first run of each feature "
+                                     "downloads its model; the status line shows the progress.\n")
+                    self.status.set("Setup finished.")
+                    continue
+                if kind == "setup-failed":
+                    self.run_button.configure(state="normal")
+                    self._set_output(f"Setup failed: {value}\n\nCheck the internet connection and "
+                                     "press “Set up” to try again; finished parts are kept.\n")
+                    self.status.set("Setup failed.")
                     continue
                 self.runner = None
                 self.run_button.configure(state="normal")

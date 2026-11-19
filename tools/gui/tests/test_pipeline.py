@@ -70,7 +70,8 @@ def test_tool_command_prefers_path_then_uv(tmp_path: Path):
         pipeline.tool_command("vocals", which=which, root=tmp_path)
 
 
-def test_run_speech_translate_accent(fake):
+def test_run_speech_translate_accent(fake, monkeypatch):
+    monkeypatch.setattr(pipeline, "ollama_models", lambda: None)
     statuses = []
     result = Runner(statuses.append, command=fake).run(Options("URL", "speech", "de", True))
     assert result.transcript.strip() == "hello world"
@@ -79,6 +80,7 @@ def test_run_speech_translate_accent(fake):
     text = pipeline.format_result(result)
     assert text.startswith("ACCENT\nus  80%") and "TRANSLATION\n1  hello world" in text
     assert any(s.startswith("transcribe: Language: en") for s in statuses)
+    assert "NLLB" in result.notes[0]  # no Ollama: offline translation, with a hint
 
 
 def test_run_song_skips_accent_for_other_languages(fake, monkeypatch):
@@ -91,7 +93,7 @@ def test_run_song_skips_accent_for_other_languages(fake, monkeypatch):
 
 
 def test_failure_reports_the_error_line(fake, monkeypatch):
-    monkeypatch.setattr(pipeline, "plan", lambda opts: [("broken", [])])
+    monkeypatch.setattr(pipeline, "plan", lambda opts, backend="llm": [("broken", [])])
     with pytest.raises(StepFailed, match="broken: error: no such video"):
         Runner(command=fake).run(Options("URL"))
 
