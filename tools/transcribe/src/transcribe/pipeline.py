@@ -12,6 +12,7 @@ import numpy as np
 
 from ingest.audio import WavReader, read_wav_tags
 from ingest.cache import cache_dir
+from ingest.cli import report_progress
 from ingest.errors import AudioError
 from ingest.source import Source, open_input
 from ingest.timeparse import format_seconds
@@ -82,6 +83,7 @@ class Progress:
         self.last_print = 0.0
 
     def __call__(self, done: float) -> None:
+        report_progress(self.label, done / self.total if self.total else 1.0)
         now = time.time()
         if not self.tty and now - self.last_print < 30 and done < self.total:
             return  # in logs, one line every 30 s is enough
@@ -194,7 +196,7 @@ def transcribe_song(model, reader, voice, language: str, separated: bool, workdi
     def compute():
         audio = reader.read()
         status(f"Transcribing {format_seconds(reader.duration)} of singing...")
-        segs, _ = model.transcribe(audio, language)
+        segs, _ = model.transcribe(audio, language, show_progress=True)
         return [s.to_dict(words=True) for s in segs]
 
     return [Segment.from_dict(d) for d in _json_cache(path, compute, use_cache)]

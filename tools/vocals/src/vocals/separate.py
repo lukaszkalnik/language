@@ -11,6 +11,7 @@ import numpy as np
 
 from ingest import audio
 from ingest.cache import cache_dir
+from ingest.cli import report_progress
 from ingest.errors import ModelError
 from ingest.models import announce_hf_download, pick_device, quiet_libraries
 from ingest.source import Source
@@ -84,6 +85,7 @@ class Progress:
         model_idx, models = data.get("model_idx_in_bag", 0), max(1, data.get("models", 1))
         frac = min(1.0, (model_idx + (done / length if length else 0)) / models)
         pct = int(frac * 100)
+        report_progress("Separating vocals", frac)
         if pct != self.last and sys.stderr.isatty():
             print(f"\rSeparating... {pct:3d}%", end="", file=sys.stderr, flush=True)
         self.last = pct

@@ -39,6 +39,24 @@ def _request(path: str, payload: dict | None = None, timeout: float = 900) -> di
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _stream(path: str, payload: dict, on_text, timeout: float = 900) -> dict:
+    """POST with streaming on; on_text(content so far) after every piece. Returns the last message."""
+    data = json.dumps(dict(payload, stream=True)).encode("utf-8")
+    req = urllib.request.Request(host() + path, data=data, headers={"Content-Type": "application/json"})
+    content = []
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        for raw in resp:
+            if not raw.strip():
+                continue
+            part = json.loads(raw.decode("utf-8"))
+            piece = part.get("message", {}).get("content", "")
+            if piece:
+                content.append(piece)
+                on_text("".join(content))
+    return {"message": {"content": "".join(content)}}
+
+
+
 def check(model: str) -> None:
     """Fail with a clear hint if Ollama is down or the model is not pulled."""
     try:
@@ -104,18 +122,28 @@ class OllamaTranslator:
 
     def __init__(self, model: str = DEFAULT_MODEL):
         self.model = model
+        self.on_progress = None  # called with the fraction of a chunk translated so far
         check(model)
 
-    def _chat(self, messages: list[dict]) -> str:
+    def _chat(self, messages: list[dict], expected_chars: int = 0) -> str:
         payload = {"model": self.model, "messages": messages, "stream": False, "think": False,
                    "options": {"temperature": 0.2, "num_ctx": 8192}}
+        on_progress = self.on_progress
+
+        def send():
+            if on_progress is None:
+                return _request("/api/chat", payload)
+            # translations are roughly as long as their source; capped, since some languages run longer
+            return _stream("/api/chat", payload,
+                           lambda text: on_progress(min(0.99, len(text) / max(1, expected_chars))))
+
         try:
-            reply = _request("/api/chat", payload)
+            reply = send()
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", "replace")
             if "think" in body.lower():  # a model without a thinking switch
                 payload.pop("think")
-                reply = _request("/api/chat", payload)
+                reply = send()
             else:
                 raise ModelError(f"Ollama error {exc.code}: {body[:200]}") from None
         except (urllib.error.URLError, OSError):
@@ -125,7 +153,8 @@ class OllamaTranslator:
     def translate(self, chunk: Chunk, source: str | None, target: str, song: bool = False) -> list[str]:
         n = len(chunk.units)
         texts = [u.text for u in chunk.units]
-        got = parse_reply(self._chat(build_messages(chunk, source, target, song)), n, texts)
+        chars = sum(len(t) + 4 for t in texts)  # plus the "12: " line numbers
+        got = parse_reply(self._chat(build_messages(chunk, source, target, song), chars), n, texts)
         missing = [i for i in range(1, n + 1) if i not in got]
         if missing and len(missing) < n:
             # Ask again for just the lines that went missing, keeping the rest of the chunk as context.

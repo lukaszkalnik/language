@@ -7,6 +7,7 @@ import sys
 
 import numpy as np
 
+from ingest.cli import progress_wanted, report_progress
 from ingest.errors import ModelError
 from ingest.models import announce_hf_download, quiet_libraries
 
@@ -74,12 +75,15 @@ class MLXWhisper:
         return dict(probs)
 
     def transcribe(self, audio: np.ndarray, language: str | None, offset: float = 0.0,
-                   clips: list[tuple[float, float]] | None = None, prompt: str | None = None) -> tuple[list[Segment], str | None]:
+                   clips: list[tuple[float, float]] | None = None, prompt: str | None = None,
+                   show_progress: bool = False) -> tuple[list[Segment], str | None]:
         import mlx_whisper
 
         clip = "0" if not clips else [t for pair in clips for t in pair]
         result = mlx_whisper.transcribe(
-            audio.astype(np.float32), path_or_hf_repo=self.repo, verbose=None, language=language,
+            audio.astype(np.float32), path_or_hf_repo=self.repo, language=language,
+            # verbose=False draws mlx-whisper's tqdm bar, which the desktop window reads as progress
+            verbose=False if show_progress and progress_wanted() else None,
             clip_timestamps=clip, initial_prompt=prompt, **DECODE,
         )
         lang = result.get("language") or language
@@ -105,7 +109,8 @@ class FasterWhisper:
         return dict(all_probs)
 
     def transcribe(self, audio: np.ndarray, language: str | None, offset: float = 0.0,
-                   clips: list[tuple[float, float]] | None = None, prompt: str | None = None) -> tuple[list[Segment], str | None]:
+                   clips: list[tuple[float, float]] | None = None, prompt: str | None = None,
+                   show_progress: bool = False) -> tuple[list[Segment], str | None]:
         opts = dict(DECODE)
         opts["log_prob_threshold"] = opts.pop("logprob_threshold")
         segments, info = self.model.transcribe(
@@ -114,7 +119,10 @@ class FasterWhisper:
         )
         lang = info.language or language
         out = []
+        duration = len(audio) / 16000
         for s in segments:
+            if show_progress and duration:
+                report_progress("Transcribing", s.end / duration)
             raw = {"start": s.start, "end": s.end, "text": s.text, "avg_logprob": s.avg_logprob,
                    "no_speech_prob": s.no_speech_prob, "compression_ratio": s.compression_ratio,
                    "words": [{"start": w.start, "end": w.end, "word": w.word, "probability": w.probability}

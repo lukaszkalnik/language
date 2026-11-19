@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sys
 
+from ingest.cli import progress_wanted, report_progress
+
 from . import languages
 from .chunks import MAX_CHARS, make_chunks
 from .document import Document
@@ -54,10 +56,17 @@ def translate_document(doc: Document, translator, target: str, source: str | Non
         return main
     sub = Document(doc.kind, todo, mode=doc.mode, language=main)
     chunks = make_chunks(sub, max_chars=max_chars, whole=(doc.mode == "song" and translator.name == "llm"))
+    total, done = sum(len(c.units) for c in chunks), 0
     for i, chunk in enumerate(chunks, 1):
         if progress and len(chunks) > 1:
             status(f"Translating part {i}/{len(chunks)} ({len(chunk.units)} line(s))...")
+        if progress_wanted() and hasattr(translator, "on_progress"):
+            base, size = done, len(chunk.units)
+            translator.on_progress = lambda f, base=base, size=size: report_progress(
+                "Translating", (base + min(1.0, f) * size) / total)
         out = translator.translate(chunk, main, target, song=doc.mode == "song")
+        done += len(chunk.units)
+        report_progress("Translating", done / total)
         for unit, text in zip(chunk.units, out, strict=True):
             unit.translation = text
     empty = sum(1 for u in doc.content() if not (u.translation or "").strip())

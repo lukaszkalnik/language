@@ -178,3 +178,25 @@ def test_plain_text_language_detection():
     doc = parse("Ceci est une phrase en français.\nEt voici une autre phrase, toujours en français.")
     main = translate_document(doc, FakeTranslator(), "de", progress=False)
     assert main == "fr"
+
+
+# --- progress for the desktop window ------------------------------------------------
+
+def test_progress_lines_follow_translated_lines(monkeypatch, capsys):
+    from ingest import cli
+
+    class Reporting(FakeTranslator):
+        on_progress = None
+
+        def translate(self, chunk, source, target, song=False):
+            self.on_progress(0.5)
+            return super().translate(chunk, source, target, song)
+
+    monkeypatch.setenv(cli.PROGRESS_ENV, "1")
+    monkeypatch.setattr(cli, "_last_progress", {})
+    doc = parse("one\n\ntwo\n\nthree\n\nfour")
+    translate_document(doc, Reporting(), "de", source="en", max_chars=8, progress=False)
+    lines = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith("@progress")]
+    fractions = [float(ln.split()[1]) for ln in lines]
+    assert 0 < fractions[0] < 1 and fractions[-1] == 1.0  # partway through the chunk, then done
+    assert fractions == sorted(fractions)

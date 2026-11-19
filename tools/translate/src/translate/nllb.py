@@ -34,6 +34,7 @@ class NLLBTranslator:
     name = "nllb"
 
     def __init__(self, model: str = DEFAULT_MODEL, device: str = "auto"):
+        self.on_progress = None  # called with the fraction of a chunk translated so far
         quiet_libraries()
         repo = MODELS.get(model, model)
         announce_hf_download(repo, "pytorch_model.bin", patterns=["*.json", "*.bin", "*.model"], what=f"NLLB-200 {model}")
@@ -60,6 +61,8 @@ class NLLBTranslator:
     def translate(self, chunk: Chunk, source: str | None, target: str, song: bool = False) -> list[str]:
         results = []
         for unit in chunk.units:
+            if self.on_progress:
+                self.on_progress(len(results) / len(chunk.units))
             src = unit.language or source
             if not src:
                 raise ValueError("NLLB needs the source language: pass --from xx")

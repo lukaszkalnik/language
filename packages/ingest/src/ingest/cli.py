@@ -6,6 +6,7 @@ import argparse
 import os
 import socket
 import sys
+import time
 from collections.abc import Callable
 
 from . import cache
@@ -16,6 +17,31 @@ from .timeparse import parse_time
 def status(message: str = "") -> None:
     """Anything for humans goes to stderr, so stdout stays clean for pipes."""
     print(message, file=sys.stderr, flush=True)
+
+
+PROGRESS_ENV = "LANGUAGE_PROGRESS"
+_last_progress: dict[str, float] = {}
+
+
+def progress_wanted() -> bool:
+    """Whether a front end (the desktop window) asked for machine-readable progress lines."""
+    return os.environ.get(PROGRESS_ENV) == "1"
+
+
+def report_progress(label: str, fraction: float, every: float = 0.5) -> None:
+    """With LANGUAGE_PROGRESS=1, print `@progress 0.42 Label` on stderr (at most every `every` s).
+
+    Terminal output is unchanged without the variable; a front end turns these lines into a
+    progress bar instead of showing them.
+    """
+    if not progress_wanted():
+        return
+    now = time.monotonic()
+    fraction = min(1.0, max(0.0, fraction))
+    if fraction < 1 and now - _last_progress.get(label, -every) < every:
+        return
+    _last_progress[label] = now
+    print(f"@progress {fraction:.3f} {label}", file=sys.stderr, flush=True)
 
 
 def time_arg(value: str) -> float:

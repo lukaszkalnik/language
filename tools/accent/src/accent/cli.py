@@ -7,7 +7,7 @@ import json
 import sys
 
 from ingest.audio import WavReader
-from ingest.cli import add_input_args, apply_common, run, status
+from ingest.cli import add_input_args, apply_common, report_progress, run, status
 from ingest.errors import AudioError
 from ingest.source import open_input
 from ingest.timeparse import format_seconds
@@ -64,7 +64,8 @@ def analyse(args: argparse.Namespace) -> dict:
 
     offset = src.start
     rows, per_chunk = [], []
-    for chunk in chunks:
+    for n, chunk in enumerate(chunks):
+        report_progress("Recognising the accent", n / len(chunks))
         row = {
             "index": chunk.index + 1,
             "start": round(offset + chunk.start, 2),

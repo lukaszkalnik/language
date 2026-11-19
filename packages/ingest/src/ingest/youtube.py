@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from .cache import cache_key
+from .cli import report_progress
 from .errors import YouTubeError
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -197,6 +198,15 @@ class _QuietLogger:
         pass
 
 
+def _download_progress(d: dict) -> None:
+    """yt-dlp progress hook: `@progress` lines for the desktop window (see ingest.cli)."""
+    total = d.get("total_bytes") or d.get("total_bytes_estimate")
+    if d.get("status") == "downloading" and total:
+        report_progress("Downloading audio", (d.get("downloaded_bytes") or 0) / total)
+    elif d.get("status") == "finished":
+        report_progress("Downloading audio", 1.0)
+
+
 def _ydl_options(ipv4: bool, **extra) -> dict:
     opts = {
         "quiet": True,
@@ -293,6 +303,7 @@ def _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info) -> Downloa
             format="bestaudio",  # audio-only streams; never fetch video
             outtmpl={"default": str(cache_dir / f"{key}.%(ext)s")},
             overwrites=True,
+            progress_hooks=[_download_progress],
         )
         if ranged and not whole:
             # Like --download-sections: only this part is fetched.
