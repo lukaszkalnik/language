@@ -8,3 +8,5 @@
 - Conventions every tool follows: data on stdout, everything for humans on stderr;
   `-` reads a WAV stream from stdin; one `error:` line and a non-zero exit code on failure.
 - Heavy model dependencies belong to the tool that needs them, never to `ingest` or the root.
+- Task concepts and specifications live in `docs/tasks/NNNN-short-title.md` (four-digit number,
+  never reused); their order is in `ROADMAP.md`. See `docs/tasks/README.md`.

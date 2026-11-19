@@ -79,3 +79,4 @@ uv run --package transcribe pytest -m integration tools/transcribe   # real mode
 | `tools/transcribe/` | language detection and transcription |
 | `tools/translate/` | translation |
 | `tools/gui/` | desktop window (Tkinter, runs the tools as subprocesses) |
+| `docs/tasks/` | task concepts and specifications (`NNNN-short-title.md`), ordered in [ROADMAP.md](ROADMAP.md) |
