@@ -105,8 +105,12 @@ def open_input(
 
         dl = youtube.fetch(arg, cache.cache_dir("downloads"), start, end, cap, use_cache, ipv4, on_info)
         if show_info:
-            _status(f"Audio:    {'cached ' if dl.from_cache else 'downloaded '}{dl.path}")
-        return Source("youtube", dl.path, dl.info.id, dl.start, dl.end, info=dl.info,
+            how = "cached" if dl.from_cache else "downloaded"
+            note = " (whole audio, faster than a section download; cut locally)" if dl.trim and not dl.from_cache else ""
+            _status(f"Audio:    {how} {dl.path}{note}")
+        trim_start = (dl.start or None) if dl.trim else None
+        trim_end = dl.end if dl.trim else None
+        return Source("youtube", dl.path, dl.info.id, dl.start, dl.end, trim_start, trim_end, info=dl.info,
                       capped=dl.capped, from_cache=dl.from_cache, label=dl.info.title)
 
     path = Path(arg).expanduser()

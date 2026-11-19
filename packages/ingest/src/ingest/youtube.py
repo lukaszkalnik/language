@@ -122,6 +122,7 @@ class Download:
     end: float | None  # where it ends (None: end of video)
     capped: bool  # True when a default cap (e.g. accent's 10 minutes) was applied
     from_cache: bool
+    trim: bool = False  # path is the whole video's audio: cut start/end when decoding
 
 
 def plan_range(
@@ -146,6 +147,28 @@ def plan_range(
             end = None  # same as "to the end"; keeps the cache key stable
             capped = False
     return begin, end, capped
+
+
+# Measured on YouTube (Nov 2026): section downloads go through ffmpeg and are served at
+# about 1.7x real time; the native downloader fetches whole audio files at 100x or more.
+SECTION_SPEED = 1.7
+FULL_SPEED = 50.0  # conservative
+MAX_FULL_SECONDS = 4 * 3600  # never fetch more than this in full just to cut a section
+SECTIONS_ONLY_ENV = "LANGUAGE_SECTIONS_ONLY"
+
+
+def prefer_full_download(begin: float, finish: float | None, duration: float | None,
+                         sections_only: bool = False) -> bool:
+    """Is fetching the whole audio and cutting locally faster than a section download?
+
+    A 15-minute section of a 2-hour video takes ~9 minutes as a section but ~2.5 minutes in
+    full (both estimated), so the full file wins unless the section is a tiny part of a long
+    video. Set LANGUAGE_SECTIONS_ONLY=1 to always download just the section (saves data).
+    """
+    if sections_only or duration is None or duration > MAX_FULL_SECONDS:
+        return False
+    section = (finish if finish is not None else duration) - begin
+    return duration / FULL_SPEED < section / SECTION_SPEED
 
 
 _SKIP_SUFFIXES = (".part", ".ytdl", ".json", ".tmp")
@@ -261,8 +284,17 @@ def _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info) -> Downloa
         if on_info is not None:
             on_info(info, begin, finish, capped)  # lets the tool show the title before downloading
         key = cache_key(video_id, begin, finish)
+        ranged = begin > 0 or finish is not None
+        full_key = cache_key(video_id, 0.0, None)
         if use_cache and (hit := cached_audio(cache_dir, key)):
-            return Download(hit, info, begin, finish, capped, from_cache=True)
+            return Download(hit, info, begin, finish, capped, from_cache=True, trim=False)
+        if ranged and use_cache and (hit := cached_audio(cache_dir, full_key)):
+            return Download(hit, info, begin, finish, capped, from_cache=True, trim=True)
+        import os
+
+        whole = ranged and prefer_full_download(begin, finish, info.duration, os.environ.get(SECTIONS_ONLY_ENV) == "1")
+        if whole:
+            key = full_key
 
         options = _ydl_options(
             ipv4,
@@ -271,7 +303,7 @@ def _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info) -> Downloa
             outtmpl={"default": str(cache_dir / f"{key}.%(ext)s")},
             overwrites=True,
         )
-        if begin > 0 or finish is not None:
+        if ranged and not whole:
             # Like --download-sections: only this part is fetched.
             options["download_ranges"] = download_range_func(None, [(begin, finish if finish is not None else float("inf"))])
             options["force_keyframes_at_cuts"] = True  # exact cuts; otherwise the section can start early
@@ -290,4 +322,4 @@ def _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info) -> Downloa
     path = Path(downloads[0]["filepath"]) if downloads and downloads[0].get("filepath") else cached_audio(cache_dir, key)
     if path is None or not path.exists():
         raise YouTubeError(f"yt-dlp reported success but no audio file was written. {UPGRADE_HINT}")
-    return Download(path, info, begin, finish, capped, from_cache=False)
+    return Download(path, info, begin, finish, capped, from_cache=False, trim=whole)

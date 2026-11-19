@@ -170,3 +170,14 @@ def test_downloads_use_ipv4_unless_told_otherwise():
 
     assert _ydl_options(True)["source_address"] == "0.0.0.0"
     assert "source_address" not in _ydl_options(None)  # fallback: system default
+
+
+def test_full_download_preferred_when_faster():
+    from ingest.youtube import prefer_full_download
+
+    assert prefer_full_download(0, 900, 7403)  # 15 min of a 2 h podcast: full is ~4x faster
+    assert prefer_full_download(0, 600, 700)  # accent's 10-minute cap on an 11-minute video
+    assert not prefer_full_download(3600, 3630, 4 * 3600 - 1)  # 30 s of a 4 h stream: section
+    assert not prefer_full_download(0, 900, 5 * 3600)  # never fetch very long videos in full
+    assert not prefer_full_download(0, 900, None)  # unknown duration
+    assert not prefer_full_download(0, 900, 7403, sections_only=True)

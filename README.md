@@ -11,7 +11,8 @@ Everything runs on your machine; no cloud APIs.
 | [`translate`](tools/translate) | Translates text or transcribe JSON line by line with a local LLM (Ollama) or NLLB-200 |
 
 They share [`ingest`](packages/ingest): files in any format ffmpeg reads, YouTube URLs
-(audio only; with `--start`/`--end` only that section is downloaded), WAV streams on stdin,
+(audio only; with `--start`/`--end` only that section is downloaded, unless the whole
+audio is faster to fetch — see [ingest](packages/ingest)), WAV streams on stdin,
 time ranges, and one download/result cache.
 
 ```bash
