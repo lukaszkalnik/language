@@ -8,6 +8,7 @@
 - Conventions every tool follows: data on stdout, everything for humans on stderr;
   `-` reads a WAV stream from stdin; one `error:` line and a non-zero exit code on failure.
 - Heavy model dependencies belong to the tool that needs them, never to `ingest` or the root.
+- Releases happen only when the user asks for one; never offer or suggest a release after a change.
 - Every release (a `v*` tag) gets a section `## <version>` in `CHANGELOG.md`, written for the
   people using the app: most important changes first, in plain words saying how each change
   affects them (what they can now do, what got faster and by how much, what they must do after
