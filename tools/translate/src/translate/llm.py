@@ -84,7 +84,10 @@ def build_messages(chunk: Chunk, source: str | None, target: str, song: bool) ->
     ]
     if song:
         rules.insert(2, "These are song lyrics, given in full so you can use the context. Give a faithful translation, "
-                        "not a poetic, rhyming or singable rewrite.")
+                        "not a poetic, rhyming or singable rewrite. Lyrics are often old-fashioned, poetic or in "
+                        "dialect (folk songs and ballads use old spellings, verb forms and pronouns): translate "
+                        "them by what they meant then. Names of people and places stay names even when they look "
+                        "like ordinary words or are written in lower case (e.g. 'Herr Mannelig' is a man's name).")
     if any(u.language and u.language != source for u in chunk.units):
         rules.insert(1, "Some lines may be in other languages; translate every line into the target language.")
     parts = []

@@ -71,3 +71,26 @@ def test_identical_low_confidence_lines_are_cut_but_choruses_stay():
     assert len(collapse_line_loops(chorus)) == 6
     loop = [seg("la la", i, i + 1, low_confidence=True) for i in range(10)]
     assert len(collapse_line_loops(loop)) == 2
+
+
+def test_subtitle_site_credits_are_cut_out_of_a_real_line():
+    from transcribe.segments import Segment, Word
+
+    words = [Word(0.0, 1.0, " Svensktextning.nu"), Word(1.2, 1.6, " Friade"), Word(1.6, 1.9, " till")]
+    seg = Segment(0.0, 1.9, "Svensktextning.nu Friade till", words=words)
+    kept, dropped = filter_segments([seg])
+    assert kept[0].text == "Friade till" and [w.text for w in kept[0].words] == [" Friade", " till"]
+    assert kept[0].start == 1.2
+    alone = Segment(5.0, 6.0, "Svensktextning.nu")
+    kept, dropped = filter_segments([alone])
+    assert not kept and dropped[0][1] == "no words"
+    keep = Segment(0.0, 2.0, "Visit example.com today")  # ordinary addresses stay
+    assert filter_segments([keep])[0][0].text == "Visit example.com today"
+
+
+def test_song_clips_start_where_the_singing_starts():
+    from transcribe.pipeline import song_clips
+
+    assert song_clips([(15.8, 30.0), (31.0, 61.9), (70.0, 80.0)], 116.0) == [(15.3, 62.4), (69.5, 80.5)]
+    assert song_clips([(0.2, 5.0), (114.0, 116.0)], 116.0) == [(0.0, 5.5), (113.5, 116.0)]
+    assert song_clips([], 116.0) is None

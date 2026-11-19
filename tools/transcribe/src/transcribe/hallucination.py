@@ -21,7 +21,13 @@ KNOWN_PHRASES = (
     "untertitel im auftrag des zdf", "untertitel der amaraorg community", "untertitelung",
     "napisy wykonane przez", "napisy stworzone przez", "sous-titres réalisés par", "sous titres",
     "sottotitoli creati dalla comunità", "subtítulos realizados por", "продолжение следует",
+    "svensktextning", "textning stina", "danske tekster", "norske tekster",
 )
+# A subtitle site's address on its own (e.g. "Svensktextning.nu"): Whisper learned these credits
+# from subtitled TV and glues them to the first real line, so they are cut out of the line.
+CREDIT_WORD = re.compile(
+    r"^\W*[\w-]*(textning|tekster|untertitel|subtit|napisy|sottotitoli|amara)[\w-]*\.(nu|org|com|net|se|dk|no|de|pl|it|fr|es)\W*$",
+    re.IGNORECASE)
 MUSIC_ONLY = re.compile(r"^[\s♪♫🎵🎶\[\]\(\)*#.,!-]*(music|musik|musique|música|muzyka|instrumental|applause)?[\s♪♫🎵🎶\[\]\(\)*#.,!-]*$", re.I)
 
 COMPRESSION_LIMIT = 2.4  # gzip ratio above this: repetitive loop
@@ -117,6 +123,16 @@ def score(seg: Segment, low_confidence: float = LOW_CONFIDENCE) -> Segment:
     return seg
 
 
+def strip_credits(seg: Segment) -> None:
+    """Cut subtitle-site addresses out of a segment's text and words."""
+    if not any(CREDIT_WORD.match(t) for t in seg.text.split()):
+        return
+    seg.text = " ".join(t for t in seg.text.split() if not CREDIT_WORD.match(t))
+    seg.words = [w for w in seg.words if not CREDIT_WORD.match(w.text.strip())]
+    if seg.words:
+        seg.start = max(seg.start, seg.words[0].start)
+
+
 def filter_segments(
     segments: list[Segment],
     voice: list[tuple[float, float]] | None = None,
@@ -127,6 +143,7 @@ def filter_segments(
     dropped: list[tuple[Segment, str]] = []
     previous = None
     for seg in segments:
+        strip_credits(seg)
         text = seg.text.strip()
         reason = None
         if not text or MUSIC_ONLY.match(text):

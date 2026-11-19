@@ -191,13 +191,30 @@ def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bo
     return segments
 
 
+SONG_GAP = 4.0  # sung stretches closer than this are transcribed as one
+SONG_PAD = 0.5  # seconds kept before and after each stretch
+
+
+def song_clips(voice: list[tuple[float, float]], duration: float) -> list[tuple[float, float]] | None:
+    """Where Whisper should listen on separated vocals: the sung stretches, padded and merged.
+
+    Started on an instrumental intro, Whisper tends to write a subtitle credit there and skip
+    the first sung lines; starting where the singing starts avoids that. None: everything.
+    """
+    if not voice:
+        return None
+    merged = vad.merge_regions(sorted(voice), SONG_GAP)
+    return [(max(0.0, a - SONG_PAD), min(duration, b + SONG_PAD)) for a, b in merged]
+
+
 def transcribe_song(model, reader, voice, language: str, separated: bool, workdir: Path, use_cache: bool):
-    path = workdir / "song.json"
+    path = workdir / "song-clips.json"  # not song.json: earlier results came from the whole audio
 
     def compute():
         audio = reader.read()
+        clips = song_clips(voice, reader.duration) if separated else None
         status(f"Transcribing {format_seconds(reader.duration)} of singing...")
-        segs, _ = model.transcribe(audio, language, show_progress=True)
+        segs, _ = model.transcribe(audio, language, clips=clips, show_progress=True)
         return [s.to_dict(words=True) for s in segs]
 
     return [Segment.from_dict(d) for d in _json_cache(path, compute, use_cache)]
