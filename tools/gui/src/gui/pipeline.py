@@ -1,0 +1,196 @@
+"""What the window runs: the command-line tools as subprocesses, chained step by step.
+
+Nothing here imports Tk or a model library, so it is unit-tested without a display.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+# Target languages offered in the selector (a subset of translate's ISO 639-1 codes).
+LANGUAGES = {
+    "en": "English", "de": "German", "pl": "Polish", "fr": "French", "es": "Spanish",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "sv": "Swedish", "da": "Danish",
+    "no": "Norwegian", "fi": "Finnish", "cs": "Czech", "sk": "Slovak", "uk": "Ukrainian",
+    "ru": "Russian", "hu": "Hungarian", "ro": "Romanian", "el": "Greek", "tr": "Turkish",
+    "ar": "Arabic", "he": "Hebrew", "hi": "Hindi", "ja": "Japanese", "ko": "Korean",
+    "zh": "Chinese", "vi": "Vietnamese", "id": "Indonesian",
+}
+
+_LANGUAGE_LINE = re.compile(r"^Language:\s*([a-z]{2,3})\b", re.MULTILINE)
+
+
+class Cancelled(Exception):
+    pass
+
+
+class StepFailed(Exception):
+    pass
+
+
+@dataclass
+class Options:
+    url: str
+    kind: str = "speech"  # "speech" or "song"
+    translate_to: str | None = None
+    accent: bool = False
+
+
+@dataclass
+class Result:
+    transcript: str = ""
+    translation: str = ""
+    accent: str = ""
+    notes: list[str] = field(default_factory=list)
+
+
+def repo_root() -> Path | None:
+    """The workspace checkout this file lives in, if it is one (for `uv run --package`)."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").is_file() and (parent / "tools").is_dir():
+            return parent
+    return None
+
+
+def tool_command(name: str, which: Callable[[str], str | None] = shutil.which,
+                 root: Path | None = None) -> list[str]:
+    """How to start a tool: installed on PATH (`uv tool install`), else from the workspace with uv."""
+    found = which(name)
+    if found:
+        return [found]
+    root = root if root is not None else repo_root()
+    uv = which("uv")
+    if uv and root is not None and (root / "tools" / name).is_dir():
+        return [uv, "run", "--project", str(root), "--package", name, name]
+    raise StepFailed(f"{name} is not installed; run: uv tool install --editable ./tools/{name}")
+
+
+def detected_language(stderr: str) -> str | None:
+    """The main language transcribe reports on stderr ("Language: en (97%)")."""
+    m = _LANGUAGE_LINE.search(stderr)
+    return m.group(1) if m else None
+
+
+def last_error(stderr: str) -> str:
+    """The tool's one `error:` line, or its last line of output."""
+    lines = [ln.strip() for ln in stderr.splitlines() if ln.strip()]
+    for ln in reversed(lines):
+        if "error:" in ln:
+            return ln
+    return lines[-1] if lines else "failed without a message"
+
+
+def plan(opts: Options) -> list[tuple[str, list[str]]]:
+    """The steps (tool, arguments) for the options. `{audio}` is the transcribed/analysed audio."""
+    steps: list[tuple[str, list[str]]] = []
+    if opts.kind == "song":
+        steps.append(("vocals", [opts.url, "-o", "{vocals}"]))
+        steps.append(("transcribe", ["{vocals}", "--mode", "song"]))
+    else:
+        steps.append(("transcribe", [opts.url, "--mode", "speech"]))
+    if opts.translate_to:
+        steps.append(("translate", ["-", "--to", opts.translate_to, "--width", "120"]))
+    if opts.accent:
+        steps.append(("accent", ["{vocals}" if opts.kind == "song" else opts.url]))
+    return steps
+
+
+class Runner:
+    """Runs a plan, one process at a time, reporting stderr lines; `cancel()` stops it."""
+
+    def __init__(self, on_status: Callable[[str], None] = lambda s: None,
+                 command: Callable[[str], list[str]] = tool_command):
+        self.on_status = on_status
+        self.command = command
+        self._proc: subprocess.Popen | None = None
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+        if self._proc and self._proc.poll() is None:
+            self._proc.kill()
+
+    def _run(self, tool: str, args: list[str], stdin: str | None = None) -> tuple[str, str]:
+        if self._cancelled:
+            raise Cancelled
+        self.on_status(f"{tool}: starting...")
+        env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        self._proc = subprocess.Popen(
+            self.command(tool) + args, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
+            errors="replace", env=env, creationflags=flags,
+        )
+        if stdin is not None:
+            def feed():
+                try:
+                    self._proc.stdin.write(stdin)
+                    self._proc.stdin.close()
+                except OSError:
+                    pass
+            threading.Thread(target=feed, daemon=True).start()
+        out_chunks: list[str] = []
+        reader = threading.Thread(target=lambda: out_chunks.append(self._proc.stdout.read()), daemon=True)
+        reader.start()
+        err_lines = []
+        for line in self._proc.stderr:
+            err_lines.append(line)
+            # progress bars redraw with \r; show the latest state
+            text = line.rstrip("\n").split("\r")[-1].strip()
+            if text:
+                self.on_status(f"{tool}: {text}")
+        self._proc.wait()
+        reader.join()
+        stderr = "".join(err_lines)
+        if self._cancelled:
+            raise Cancelled
+        if self._proc.returncode != 0:
+            raise StepFailed(last_error(stderr))
+        return "".join(out_chunks), stderr
+
+    def run(self, opts: Options) -> Result:
+        result = Result()
+        language = None
+        with tempfile.TemporaryDirectory(prefix="language-gui-") as tmp:
+            vocals = str(Path(tmp) / "vocals.wav")
+            for tool, args in plan(opts):
+                args = [vocals if a == "{vocals}" else a for a in args]
+                if tool == "transcribe":
+                    result.transcript, err = self._run(tool, args)
+                    language = detected_language(err)
+                    if not result.transcript.strip():
+                        result.notes.append("No speech or singing found.")
+                        break
+                elif tool == "translate":
+                    result.translation, _ = self._run(tool, args, stdin=result.transcript)
+                elif tool == "accent":
+                    if language and language != "en":
+                        name = LANGUAGES.get(language, language)
+                        result.notes.append(f"Accent recognition skipped: works for English only, this is {name}.")
+                        continue
+                    result.accent, _ = self._run(tool, args)
+                else:
+                    self._run(tool, args)
+        return result
+
+
+def format_result(result: Result) -> str:
+    parts = []
+    if result.accent.strip():
+        parts.append("ACCENT\n" + result.accent.strip())
+    if result.translation.strip():
+        parts.append("TRANSLATION\n" + result.translation.rstrip())
+    elif result.transcript.strip():
+        parts.append("TRANSCRIPT\n" + result.transcript.rstrip())
+    if result.notes:
+        parts.append("\n".join(result.notes))
+    return "\n\n".join(parts) + "\n"

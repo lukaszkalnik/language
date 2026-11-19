@@ -24,6 +24,7 @@ supported-markers = [
 [manifest]
 members = [
     "accent",
+    "gui",
     "ingest",
     "language-workspace",
     "transcribe",
@@ -1331,6 +1332,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ea/a4/6ef6fc206a3ab51f30186d882034216e4fa3af6aebc10fbeb2d8a7caab4b/grpcio-1.85.3-cp315-cp315-win32.whl", hash = "sha256:df6de234f7ee8b65177ef731decc88495dbed42446c4cf007a411280ffbda86c", size = 4854418, upload-time = "2026-11-18T04:27:56.957Z" },
     { url = "https://files.pythonhosted.org/packages/2e/59/e55fc8322982b0dd54dabfc7660d56e5dd1bf6c5ecfbe84c556b4d826365/grpcio-1.85.3-cp315-cp315-win_amd64.whl", hash = "sha256:db5a410f61d4030a1d605e482095c216e3ff107571d37f2de5005c23d336b7ef", size = 5758673, upload-time = "2026-11-18T04:27:58.474Z" },
 ]
+
+[[package]]
+name = "gui"
+version = "0.1.0"
+source = { editable = "tools/gui" }
 
 [[package]]
 name = "h11"

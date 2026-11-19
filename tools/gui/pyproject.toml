@@ -1,0 +1,15 @@
+[project]
+name = "gui"
+version = "0.1.0"
+description = "A small desktop window (Tk) over the tools: paste a URL, pick song/speech, translation, accent"
+readme = "README.md"
+requires-python = ">=3.11"
+# Standard library only (tkinter): the tools run as subprocesses in their own environments.
+dependencies = []
+
+[project.gui-scripts]
+language-gui = "gui.app:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"

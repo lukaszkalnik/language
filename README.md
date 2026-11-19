@@ -9,6 +9,7 @@ Everything runs on your machine; no cloud APIs.
 | [`vocals`](tools/vocals) | Separates the vocals (or another stem) from music with Demucs, at the source's sample rate |
 | [`transcribe`](tools/transcribe) | Detects the language and transcribes speech or singing with Whisper large-v3 (MLX on Apple Silicon); lyrics, paragraphs, speakers, LRC/SRT/VTT/Markdown/JSON |
 | [`translate`](tools/translate) | Translates text or transcribe JSON line by line with a local LLM (Ollama) or NLLB-200 |
+| [`gui`](tools/gui) | `language-gui`: a desktop window over the tools — paste a URL, pick song/speech, translation, accent |
 
 They share [`ingest`](packages/ingest): files in any format ffmpeg reads, YouTube URLs
 (audio only; with `--start`/`--end` only that section is downloaded, unless the whole
@@ -53,6 +54,7 @@ uv tool install --editable ./tools/accent
 uv tool install --editable ./tools/vocals
 uv tool install --editable ./tools/transcribe
 uv tool install --editable ./tools/translate
+uv tool install --editable ./tools/gui        # optional window: language-gui
 ```
 
 Or work inside the workspace: `uv sync --package transcribe` installs only what transcribe
@@ -76,3 +78,4 @@ uv run --package transcribe pytest -m integration tools/transcribe   # real mode
 | `tools/vocals/` | vocal separation |
 | `tools/transcribe/` | language detection and transcription |
 | `tools/translate/` | translation |
+| `tools/gui/` | desktop window (Tkinter, runs the tools as subprocesses) |
