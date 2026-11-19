@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import queue
+import re
 import sys
 import threading
 import time
@@ -31,6 +32,7 @@ from .rangeslider import RangeSlider
 from .timerange import format_time
 
 PAD = 8
+LIST_ITEM = re.compile(r"^(\s*)([•–-]\s+)\S")  # leading spaces, then the bullet and its gap
 INFO_DELAY_MS = 600  # wait this long after typing stops before asking for the length
 
 
@@ -137,6 +139,7 @@ class App:
         self._set_icon()
         if self._needs_setup:
             self._set_output(setup.INTRO.format(folder=setup.data_dir()))
+            self.transcript_title.set("Before the first use")
             self.run_button.configure(text="Set up", command=self.start_setup)
             self.status.set("First start: the tools need to be installed once.")
 
@@ -213,10 +216,19 @@ class App:
         if sys.platform == "darwin":
             text.bind("<Control-Button-1>", lambda e: (menu.tk_popup(e.x_root, e.y_root), "break")[1])
 
-    @staticmethod
-    def _fill(text: tk.Text, value: str) -> None:
+    def _fill(self, text: tk.Text, value: str) -> None:
+        """Show text; list items ("• ", "- ", "– ", nested by leading spaces) get a hanging indent."""
         text.delete("1.0", "end")
         text.insert("1.0", value)
+        font = tkfont.Font(font=text.cget("font"))
+        for number, line in enumerate(value.split("\n"), 1):
+            m = LIST_ITEM.match(line)
+            if m:
+                tag = f"item{len(m.group(1))}"
+                if tag not in text.tag_names():
+                    lead = font.measure(m.group(1))
+                    text.tag_configure(tag, lmargin1=lead, lmargin2=lead + font.measure(m.group(2)))
+                text.tag_add(tag, f"{number}.0", f"{number}.end")
 
     def _set_output(self, value: str) -> None:
         """A message in the transcript pane (setup, errors); the rest is cleared."""
@@ -477,6 +489,7 @@ class App:
                 self._stop_busy(kind)
                 if kind == "setup-done":
                     self._needs_setup = False
+                    self.transcript_title.set("Transcript")
                     self.run_button.configure(text="Run", command=self.start, state="normal")
                     self._set_output("Ready. Paste a URL and press Run.\n\nThe first run of each feature "
                                      "downloads its model; the status line shows the progress.\n")

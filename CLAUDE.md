@@ -12,6 +12,7 @@
   people using the app: most important changes first, in plain words saying how each change
   affects them (what they can now do, what got faster and by how much, what they must do after
   updating), not which modules changed. The release workflow puts that section into the
-  GitHub release notes and fails without it.
+  GitHub release notes and fails without it. Collect changes under `## Unreleased` meanwhile and
+  rename it to the version when tagging.
 - Task concepts and specifications live in `docs/tasks/NNNN-short-title.md` (four-digit number,
   never reused); their order is in `ROADMAP.md`. See `docs/tasks/README.md`.

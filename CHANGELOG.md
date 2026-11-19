@@ -3,6 +3,13 @@
 What changed for people using Language, newest release first. Each release lists the most
 important changes first. The section for a release opens its GitHub release notes.
 
+## Unreleased
+
+- The welcome screen before setup says what gets installed in plain words (the four tools by
+  what they do: transcription, song vocals, accent recognition, translation) and lists each
+  model's download size on its own line.
+- Lists in the window keep their indent when a line wraps, so they are easier to read.
+
 ## 0.3.1
 
 (0.3.0 was tagged but never published: its build stopped at a failing test.)

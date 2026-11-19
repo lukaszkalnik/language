@@ -26,18 +26,25 @@ FFMPEG_WHEEL = "imageio-ffmpeg==0.8.1"
 DENO = "deno==2.9.8"
 EXE = ".exe" if sys.platform == "win32" else ""
 
+# One line per paragraph or list item: the window wraps them and indents wrapped list items.
 INTRO = """\
 Welcome! Before the first use, Language installs its tools on this computer.
 
-  • Now: Python, PyTorch, the four tools, ffmpeg and Deno — about 2–3 GB, once.
-  • Later, the first time each feature is used, its model is downloaded:
-      transcription 3.1 GB · song vocals 0.3 GB · accent 0.1 GB · offline translation 2.5 GB
-  • Everything then runs on this computer; nothing is uploaded.
-    No accounts or tokens are needed.
+Now, once (about 2–3 GB):
+• Python and PyTorch, which run the speech and music models
+• the four tools: transcription, song vocals (separates the singing from the music), accent recognition and translation
+• ffmpeg, which reads audio and video files, and Deno, which YouTube downloads need
 
-This needs an internet connection and can take 10–30 minutes.
-Everything goes into:
-  {folder}
+Later, the first time you use a feature, its model is downloaded:
+• transcription: 3.1 GB
+• song vocals: 0.3 GB
+• accent recognition: 0.1 GB
+• offline translation: 2.5 GB (not needed if you use Ollama)
+
+Everything then runs on this computer: nothing is uploaded, and no accounts or tokens are needed.
+
+Setup needs an internet connection and takes 10–30 minutes. Everything goes into:
+{folder}
 
 Press “Set up” to start.
 """
