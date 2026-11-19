@@ -8,6 +8,8 @@ important changes first. The section for a release opens its GitHub release note
 - **Songs no longer lose their first lines.** On a song with an instrumental intro, the
   transcription could start with a made-up subtitle credit (e.g. "Svensktextning.nu") and skip
   the first sung lines. It now starts listening where the singing starts.
+- "Thanks for watching" lines that Whisper makes up in Swedish, Danish, Norwegian, German,
+  Polish, French, Spanish and Italian are removed, as the English ones already were.
 - **Better translations of old or poetic lyrics:** names stay names ("Herr Mannelig" is no
   longer translated as "Sir manly"), and old-fashioned words are translated by their old meaning.
 - The welcome screen before setup says what gets installed in plain words (the four tools by

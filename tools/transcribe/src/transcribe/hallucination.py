@@ -22,6 +22,9 @@ KNOWN_PHRASES = (
     "napisy wykonane przez", "napisy stworzone przez", "sous-titres réalisés par", "sous titres",
     "sottotitoli creati dalla comunità", "subtítulos realizados por", "продолжение следует",
     "svensktextning", "textning stina", "danske tekster", "norske tekster",
+    "tack för att du tittade", "tack för att ni tittade", "tack för att ni har tittat", "tack för att du har tittat",
+    "tak fordi du så med", "takk for at du så på", "danke fürs zuschauen", "vielen dank fürs zuschauen",
+    "dziękuję za obejrzenie", "merci davoir regardé", "gracias por ver el video", "grazie per la visione",
 )
 # A subtitle site's address on its own (e.g. "Svensktextning.nu"): Whisper learned these credits
 # from subtitled TV and glues them to the first real line, so they are cut out of the line.

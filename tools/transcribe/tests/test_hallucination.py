@@ -94,3 +94,9 @@ def test_song_clips_start_where_the_singing_starts():
     assert song_clips([(15.8, 30.0), (31.0, 61.9), (70.0, 80.0)], 116.0) == [(15.3, 62.4), (69.5, 80.5)]
     assert song_clips([(0.2, 5.0), (114.0, 116.0)], 116.0) == [(0.0, 5.5), (113.5, 116.0)]
     assert song_clips([], 116.0) is None
+
+
+def test_thanks_for_watching_in_other_languages():
+    assert is_known_phrase("Tack för att du tittade på den här videon!")
+    assert is_known_phrase("Vielen Dank fürs Zuschauen.")
+    assert not is_known_phrase("Tack för allt")
