@@ -7,9 +7,8 @@ V6 = (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::1", 443, 0, 0))
 V4 = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 443))
 
 
-def test_ipv4_first_keeps_ipv6_fallback():
-    assert order_addresses([V6, V4]) == [V4, V6]
-    assert order_addresses([V6]) == [V6]
+def test_default_keeps_the_system_order():
+    assert order_addresses([V6, V4]) == [V6, V4]
 
 
 def test_ipv4_only():

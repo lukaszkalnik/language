@@ -34,8 +34,8 @@ accent "https://www.youtube.com/watch?v=QXX-uwQ-VGw"
 - Failures exit non-zero with one `error:` line, no stack trace (`LANGUAGE_DEBUG=1` shows it).
 - `--start` / `--end` take seconds, `mm:ss` or `hh:mm:ss`; `--no-cache` recomputes;
   `--cache-dir` (or `LANGUAGE_CACHE`) moves the cache (default `~/.cache/language`).
-- Downloads try IPv4 first, so a network with broken IPv6 does not hang them; `--ipv4` (or
-  `LANGUAGE_IPV4=1`) uses IPv4 only.
+- Downloads use the system's network settings (IPv6 and IPv4). On a network with broken IPv6,
+  where downloads hang, `--ipv4` (or `LANGUAGE_IPV4=1`) uses IPv4 only.
 - The download size is printed the first time a model is fetched.
 
 ## Install

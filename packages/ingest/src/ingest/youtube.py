@@ -197,7 +197,7 @@ class _QuietLogger:
         pass
 
 
-def _ydl_options(ipv4: bool | None, **extra) -> dict:
+def _ydl_options(ipv4: bool, **extra) -> dict:
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -208,11 +208,11 @@ def _ydl_options(ipv4: bool | None, **extra) -> dict:
         "js_runtimes": {"deno": {}, "node": {}, "bun": {}, "quickjs": {}},
         "logger": _QuietLogger(),
     }
-    # IPv4 by default. YouTube signs stream URLs for the address that asked for them; if
-    # yt-dlp's requests and ffmpeg's (which section downloads use) leave over different IP
-    # versions, the stream is throttled to about real time or refused (ffmpeg exit code 8).
-    # ipv4=None means "let the system choose" (the fallback when IPv4 is unreachable).
-    if ipv4 is not False and ipv4 is not None:
+    # --ipv4 goes to yt-dlp itself, not just to Python's resolver: YouTube signs stream URLs
+    # for the address that asked for them, and if yt-dlp's requests and ffmpeg's (section
+    # downloads) leave over different IP versions, the stream is throttled to about real
+    # time or refused (ffmpeg exit code 8).
+    if ipv4:
         opts["source_address"] = "0.0.0.0"
     opts.update(extra)
     return opts
@@ -244,17 +244,8 @@ def fetch(
     ipv4: bool = False,
     on_info=None,
 ) -> Download:
-    """Fetch metadata and the best audio-only stream (only the needed section).
-
-    Uses IPv4; if that fails with a network error (an IPv6-only network) and IPv4 was not
-    explicitly requested, tries once more letting the system pick the address family.
-    """
-    try:
-        return _fetch(url, cache_dir, start, end, cap, use_cache, True, on_info)
-    except YouTubeError as exc:
-        if ipv4 or not str(exc).startswith("Network error"):
-            raise
-        return _fetch(url, cache_dir, start, end, cap, use_cache, None, None)
+    """Fetch metadata and the best audio-only stream (only the needed section)."""
+    return _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info)
 
 
 def _fetch(url, cache_dir, start, end, cap, use_cache, ipv4, on_info) -> Download:

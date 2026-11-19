@@ -165,11 +165,11 @@ def test_explain_error(message, expected):
     assert "\n" not in text
 
 
-def test_downloads_use_ipv4_unless_told_otherwise():
+def test_ipv4_only_when_asked():
     from ingest.youtube import _ydl_options
 
     assert _ydl_options(True)["source_address"] == "0.0.0.0"
-    assert "source_address" not in _ydl_options(None)  # fallback: system default
+    assert "source_address" not in _ydl_options(False)  # system default: IPv6 and IPv4
 
 
 def test_full_download_preferred_when_faster():
