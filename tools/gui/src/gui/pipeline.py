@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import setup
+from .timerange import range_args
 
 # Target languages offered in the selector (a subset of translate's ISO 639-1 codes).
 LANGUAGES = {
@@ -79,17 +80,22 @@ class StepFailed(Exception):
 class Options:
     url: str
     kind: str = "speech"  # "speech" or "song"
-    translate_to: str | None = None
+    translate_to: str | None = None  # translate right after transcribing
     accent: bool = False
+    start: float | None = None  # None: from the beginning
+    end: float | None = None  # None: to the end
 
 
 @dataclass
 class Result:
     transcript: str = ""
     language: str = ""  # as describe_language() puts it
+    language_code: str | None = None  # transcribe's main language, passed on to translate
     translation: str = ""
+    translated_to: str | None = None
     accent: str = ""
     notes: list[str] = field(default_factory=list)
+    translation_notes: list[str] = field(default_factory=list)
 
 
 def repo_root() -> Path | None:
@@ -102,13 +108,20 @@ def repo_root() -> Path | None:
 
 def tool_command(name: str, which: Callable[[str], str | None] = shutil.which,
                  root: Path | None = None) -> list[str]:
-    """How to start a tool: installed by the app's setup, on PATH, else from the workspace with uv."""
+    """How to start a tool: installed by the app's setup, on PATH, else from the workspace with uv.
+
+    The packaged app uses its own installation first. Run from source, PATH comes first: the
+    app's folder may hold tools from an older release than this window.
+    """
     own = setup.bin_dir() / f"{name}{setup.EXE}"
-    if which is shutil.which and own.is_file():
+    mine = which is shutil.which and own.is_file()
+    if mine and setup.frozen():
         return [str(own)]
     found = which(name)
     if found:
         return [found]
+    if mine:
+        return [str(own)]
     root = root if root is not None else repo_root()
     uv = which("uv")
     if uv and root is not None and (root / "tools" / name).is_dir():
@@ -144,6 +157,34 @@ def describe_language(line: str) -> str | None:
     return text
 
 
+_DURATION_LINE = re.compile(r"^Duration:\s*(\d+(?::\d{2}){1,2})\s*$")  # a video's length (ingest)
+_AUDIO_LINE = re.compile(r"^Audio:\s*(\d+(?::\d{2}){1,2})\b")  # transcribe: length of what it reads
+
+
+def clock_seconds(text: str) -> float:
+    seconds = 0
+    for part in text.split(":"):
+        seconds = seconds * 60 + int(part)
+    return float(seconds)
+
+
+def reported_duration(line: str, whole: bool) -> float | None:
+    """The input's length from a tool's stderr line, for when `--info` gave none.
+
+    `Duration:` is a video's full length; transcribe's `Audio:` is the full length only when
+    the run covers the whole input (`whole`).
+    """
+    m = _DURATION_LINE.match(line.strip()) or (_AUDIO_LINE.match(line.strip()) if whole else None)
+    return clock_seconds(m.group(1)) if m else None
+
+
+def explain_info_error(message: str) -> str:
+    if "unrecognized arguments: --info" in message:
+        return ("the installed tools are older than this window (no --info); update them "
+                "(uv tool install --editable ./tools/<tool>, or Set up in the app)")
+    return message
+
+
 def last_error(stderr: str) -> str:
     """The tool's one `error:` line, or its last line of output."""
     lines = [ln.strip() for ln in stderr.splitlines() if ln.strip()]
@@ -153,20 +194,92 @@ def last_error(stderr: str) -> str:
     return lines[-1] if lines else "failed without a message"
 
 
+def translate_args(to: str, source: str | None = None, translator: str = "llm") -> list[str]:
+    """translate on the transcript (stdin); `--from` only for a language translate knows."""
+    args = ["-", "--to", to]
+    if source and source in LANGUAGES:
+        args += ["--from", source]
+    return args + ["--only-translation", "--translator", translator]
+
+
 def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
-    """The steps (tool, arguments) for the options. `{audio}` is the transcribed/analysed audio."""
+    """The steps (tool, arguments) for the options. `{vocals}` is the separated vocals' file.
+
+    A narrowed range goes to the step that reads the URL: for a song that is vocals, whose
+    output already is just that part (and says where it begins, so timestamps stay right).
+    Accent without a range keeps its default cap (the first 10 minutes of a video).
+    """
+    rng = range_args(opts.start, opts.end)
     steps: list[tuple[str, list[str]]] = []
     if opts.kind == "song":
-        steps.append(("vocals", [opts.url, "-o", "{vocals}"]))
+        steps.append(("vocals", [opts.url, *rng, "-o", "{vocals}"]))
         steps.append(("transcribe", ["{vocals}", "--mode", "song"]))
     else:
-        steps.append(("transcribe", [opts.url, "--mode", "speech"]))
+        steps.append(("transcribe", [opts.url, *rng, "--mode", "speech"]))
     if opts.translate_to:
-        steps.append(("translate", ["-", "--to", opts.translate_to, "--width", "120",
-                                    "--translator", translator]))
+        steps.append(("translate", translate_args(opts.translate_to, None, translator)))
     if opts.accent:
-        steps.append(("accent", ["{vocals}" if opts.kind == "song" else opts.url]))
+        steps.append(("accent", ["{vocals}"] if opts.kind == "song" else [opts.url, *rng]))
     return steps
+
+
+INFO_TOOL = "transcribe"  # needed for every run anyway; --info loads no model
+
+
+def looks_like_input(text: str) -> bool:
+    """Worth asking for the length: a URL, or a path to an existing file."""
+    text = text.strip()
+    if not text:
+        return False
+    if re.match(r"^(https?://|(www\.|m\.|music\.)?youtube\.com/|youtu\.be/)", text, re.IGNORECASE):
+        return True
+    return Path(text).expanduser().is_file()
+
+
+def parse_info(stdout: str) -> dict:
+    """The JSON line `--info` prints; StepFailed when there is none."""
+    for line in reversed(stdout.strip().splitlines()):
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            return data
+    raise StepFailed("no information about the input")
+
+
+class InfoQuery:
+    """`<tool> INPUT --info` in the background of the window: the title and duration."""
+
+    def __init__(self, command: Callable[[str], list[str]] = tool_command):
+        self.command = command
+        self._proc: subprocess.Popen | None = None
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+        if self._proc and self._proc.poll() is None:
+            self._proc.kill()
+
+    def run(self, url: str, timeout: float = 60) -> dict:
+        if self._cancelled:
+            raise Cancelled
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        self._proc = subprocess.Popen(
+            self.command(INFO_TOOL) + [url, "--info"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", env=setup.tool_env(),
+            creationflags=flags,
+        )
+        try:
+            out, err = self._proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
+            raise StepFailed("no answer about the input") from None
+        if self._cancelled:
+            raise Cancelled
+        if self._proc.returncode != 0:
+            raise StepFailed(explain_info_error(last_error(err)))
+        return parse_info(out)
 
 
 STEP_TITLES = {
@@ -207,6 +320,7 @@ class Runner:
         self.command = command
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
+        self._whole = False  # the run covers the whole input (its length can be read off)
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -245,6 +359,9 @@ class Runner:
                 found = describe_language(event[1]) if tool == "transcribe" else None
                 if found:
                     self.on_event("language", found)
+                length = reported_duration(event[1], self._whole and tool == "transcribe")
+                if length:
+                    self.on_event("duration", length)
             self.on_event(*event)
         self._proc.wait()
         reader.join()
@@ -258,13 +375,10 @@ class Runner:
     def run(self, opts: Options) -> Result:
         result = Result()
         language = None
+        self._whole = opts.start is None and opts.end is None
         with tempfile.TemporaryDirectory(prefix="language-gui-") as tmp:
             vocals = str(Path(tmp) / "vocals.wav")
-            backend = "llm"
-            if opts.translate_to:
-                backend = translator(ollama_models())
-                if backend == "nllb":
-                    result.notes.append(NLLB_NOTE.format(model=LLM_MODEL))
+            backend = translator(ollama_models()) if opts.translate_to else "llm"
             steps = plan(opts, backend)
             for index, (tool, args) in enumerate(steps, 1):
                 args = [vocals if a == "{vocals}" else a for a in args]
@@ -272,12 +386,13 @@ class Runner:
                 if tool == "transcribe":
                     result.transcript, err = self._run(tool, args)
                     language = detected_language(err)
+                    result.language_code = language
                     result.language = describe_language(err) or ""
                     if not result.transcript.strip():
                         result.notes.append("No speech or singing found.")
                         break
                 elif tool == "translate":
-                    result.translation, _ = self._run(tool, args, stdin=result.transcript)
+                    self._translate(result, opts.translate_to, backend)
                 elif tool == "accent":
                     if language and language != "en":
                         name = language_name(language)
@@ -288,17 +403,53 @@ class Runner:
                     self._run(tool, args)
         return result
 
+    def translate(self, result: Result, to: str) -> Result:
+        """Translate a finished run's transcript (again), without transcribing again."""
+        if not result.transcript.strip():
+            raise StepFailed("nothing to translate yet: run a transcription first")
+        backend = translator(ollama_models())
+        self.on_event("step", (1, 1, STEP_TITLES["translate"]))
+        self._translate(result, to, backend)
+        return result
 
-def format_result(result: Result) -> str:
+    def _translate(self, result: Result, to: str, backend: str) -> None:
+        translation, _ = self._run("translate", translate_args(to, result.language_code, backend),
+                                   stdin=result.transcript)
+        result.translation, result.translated_to = translation, to
+        result.translation_notes = [NLLB_NOTE.format(model=LLM_MODEL)] if backend == "nllb" else []
+
+
+def format_summary(result: Result) -> str:
+    """What is found about the recording: language, accent and notes."""
     parts = []
     if result.language:
         parts.append("LANGUAGE\n" + result.language)
     if result.accent.strip():
         parts.append("ACCENT\n" + result.accent.strip())
-    if result.translation.strip():
-        parts.append("TRANSLATION\n" + result.translation.rstrip())
-    elif result.transcript.strip():
-        parts.append("TRANSCRIPT\n" + result.transcript.rstrip())
     if result.notes:
         parts.append("\n".join(result.notes))
-    return "\n\n".join(parts) + "\n"
+    return "\n\n".join(parts) + ("\n" if parts else "")
+
+
+def format_transcript(result: Result) -> str:
+    return result.transcript.rstrip() + "\n" if result.transcript.strip() else ""
+
+
+def format_translation(result: Result) -> str:
+    if not result.translation.strip():
+        return ""
+    text = result.translation.rstrip() + "\n"
+    if result.translation_notes:
+        text += "\n" + "\n".join(result.translation_notes) + "\n"
+    return text
+
+
+def format_result(result: Result) -> str:
+    """Everything as one text (Copy all): summary, transcript, then the translation."""
+    parts = [format_summary(result).rstrip()]
+    if result.transcript.strip():
+        parts.append("TRANSCRIPT\n" + format_transcript(result).rstrip())
+    if result.translation.strip():
+        name = language_name(result.translated_to) if result.translated_to else ""
+        parts.append(f"TRANSLATION{' (' + name + ')' if name else ''}\n" + format_translation(result).rstrip())
+    return "\n\n".join(p for p in parts if p) + "\n"

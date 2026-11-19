@@ -1,6 +1,6 @@
 # 0004 Window: time range and translating afterwards
 
-Status: concept
+Status: done
 
 ## Problem
 The window always processes the whole video or file, which for a long video means a long
@@ -50,3 +50,16 @@ language, or deciding to translate after reading it, means transcribing again.
   transcribe.
 - Unit tests for the slider's value logic (snapping, minimum span, typed times), `--info`, and
   the window's step plans; READMEs updated.
+
+## Outcome
+- `--info` in every tool's input arguments (ingest), metadata only; the window asks `transcribe`.
+- Range slider (`gui/rangeslider.py`, value logic in `gui/timerange.py`); a narrowed range goes
+  to the step that reads the URL. When `--info` fails, the length is taken from the run's own
+  `Duration:` / `Audio:` lines, so the slider works from the second run.
+- Song timestamps stay absolute: `vocals` tags a section's WAV with where it begins (`IOFS`),
+  and `open_input` adds it back (transcribe and accent).
+- Accent keeps its 10-minute cap without a range (no `--full` from the window).
+- Translate is its own action with `--from` and `--only-translation`; transcript and translation
+  are shown in two panes.
+- Checked with a real run: an 11:40 video's length showed in 3 s; 1:00–2:00 transcribed in 50 s;
+  German, then Polish, without transcribing again.

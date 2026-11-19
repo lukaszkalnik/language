@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import queue
 import sys
 import threading
@@ -11,9 +12,26 @@ from tkinter import font as tkfont
 from tkinter import ttk
 
 from . import setup
-from .pipeline import LANGUAGES, Cancelled, Options, Runner, StepFailed, format_result
+from .pipeline import (
+    LANGUAGES,
+    Cancelled,
+    InfoQuery,
+    Options,
+    Result,
+    Runner,
+    StepFailed,
+    format_result,
+    format_summary,
+    format_transcript,
+    format_translation,
+    language_name,
+    looks_like_input,
+)
+from .rangeslider import RangeSlider
+from .timerange import format_time
 
 PAD = 8
+INFO_DELAY_MS = 600  # wait this long after typing stops before asking for the length
 
 
 class App:
@@ -21,14 +39,21 @@ class App:
         self.root = root
         self.events: queue.Queue = queue.Queue()
         self.runner: Runner | None = None
+        self.result: Result | None = None
+        self._job = ""  # "run" or "translate" while one is going
+        self._needs_setup = setup.needed()
+        self._info: InfoQuery | None = None
+        self._info_url = ""
+        self._info_gen = 0
+        self._info_after: str | None = None
         root.title("Language")
-        root.geometry("900x640")
-        root.minsize(560, 400)
+        root.geometry("1000x700")
+        root.minsize(640, 460)
 
         frame = ttk.Frame(root, padding=PAD)
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(4, weight=1)
+        frame.rowconfigure(5, weight=1)
 
         ttk.Label(frame, text="URL").grid(row=0, column=0, sticky="w")
         self.url = tk.StringVar()
@@ -36,34 +61,39 @@ class App:
         entry.grid(row=0, column=1, sticky="ew", padx=(PAD, 0))
         entry.bind("<Return>", lambda e: self.start())
         entry.focus_set()
+        self.url.trace_add("write", lambda *a: self._url_changed())
+
+        ttk.Label(frame, text="Range").grid(row=1, column=0, sticky="w", pady=(PAD, 0))
+        self.slider = RangeSlider(frame, pad=PAD)
+        self.slider.grid(row=1, column=1, sticky="ew", padx=(PAD, 0), pady=(PAD, 0))
 
         opts = ttk.Frame(frame)
-        opts.grid(row=1, column=0, columnspan=2, sticky="w", pady=PAD)
+        opts.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(PAD, 0))
         self.kind = tk.StringVar(value="speech")
         ttk.Radiobutton(opts, text="Speech", value="speech", variable=self.kind).pack(side="left")
         ttk.Radiobutton(opts, text="Song", value="song", variable=self.kind).pack(side="left", padx=(PAD, 3 * PAD))
-
-        self.translate = tk.BooleanVar(value=False)
-        ttk.Checkbutton(opts, text="Translate to", variable=self.translate,
-                        command=self._sync_language).pack(side="left")
-        self.names = [f"{name} ({code})" for code, name in sorted(LANGUAGES.items(), key=lambda kv: kv[1])]
-        self.language = ttk.Combobox(opts, values=self.names, state="disabled", width=18)
-        self.language.set("English (en)")
-        self.language.pack(side="left", padx=(4, 3 * PAD))
-
         self.accent = tk.BooleanVar(value=False)
         ttk.Checkbutton(opts, text="Accent recognition (English only)", variable=self.accent).pack(side="left")
+        self.stop_button = ttk.Button(opts, text="Stop", command=self.stop, state="disabled")
+        self.stop_button.pack(side="right")
+        self.run_button = ttk.Button(opts, text="Run", command=self.start)
+        self.run_button.pack(side="right", padx=PAD)
 
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=2, column=0, columnspan=2, sticky="w")
-        self.run_button = ttk.Button(buttons, text="Run", command=self.start)
-        self.run_button.pack(side="left")
-        self.stop_button = ttk.Button(buttons, text="Stop", command=self.stop, state="disabled")
-        self.stop_button.pack(side="left", padx=PAD)
-        ttk.Button(buttons, text="Copy all", command=self.copy_all).pack(side="left")
+        tr = ttk.Frame(frame)
+        tr.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(PAD, 0))
+        ttk.Label(tr, text="Translate to").pack(side="left")
+        self.names = [f"{name} ({code})" for code, name in sorted(LANGUAGES.items(), key=lambda kv: kv[1])]
+        self.language = ttk.Combobox(tr, values=self.names, state="readonly", width=18)
+        self.language.set("English (en)")
+        self.language.pack(side="left", padx=(4, PAD))
+        self.translate_button = ttk.Button(tr, text="Translate", command=self.translate_now, state="disabled")
+        self.translate_button.pack(side="left")
+        self.translate = tk.BooleanVar(value=False)
+        ttk.Checkbutton(tr, text="also right after each run", variable=self.translate).pack(side="left", padx=(PAD, 0))
+        ttk.Button(tr, text="Copy all", command=self.copy_all).pack(side="right")
 
         busy = ttk.Frame(frame)
-        busy.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(PAD, 4))
+        busy.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(PAD, 4))
         busy.columnconfigure(0, weight=1)
         self.step_text = tk.StringVar()
         self.clock = tk.StringVar()
@@ -73,7 +103,8 @@ class App:
         ttk.Label(busy, textvariable=self.clock, foreground="gray").grid(row=0, column=1, sticky="e")
         self.bar = ttk.Progressbar(busy, mode="determinate", maximum=100)
         self.bar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=2)
-        self.status = tk.StringVar(value="Paste a YouTube URL (or a file path) and press Run.")
+        self.status = tk.StringVar(value="Paste a YouTube URL (or a file path); its length appears on the "
+                                         "Range slider, then press Run.")
         ttk.Label(busy, textvariable=self.status, foreground="gray").grid(row=2, column=0, sticky="w")
         self.found_language = tk.StringVar()
         ttk.Label(busy, textvariable=self.found_language).grid(row=2, column=1, sticky="e")
@@ -84,28 +115,51 @@ class App:
         self._phase: tuple[str | None, float, float] | None = None  # label, start time, start fraction
 
         out = ttk.Frame(frame)
-        out.grid(row=4, column=0, columnspan=2, sticky="nsew")
-        out.rowconfigure(0, weight=1)
+        out.grid(row=5, column=0, columnspan=2, sticky="nsew")
+        out.rowconfigure(1, weight=1)
         out.columnconfigure(0, weight=1)
-        mono = tkfont.nametofont("TkFixedFont").copy()
-        mono.configure(size=max(mono.cget("size"), 12))
-        self.output = tk.Text(out, wrap="none", font=mono, undo=False)
-        yscroll = ttk.Scrollbar(out, orient="vertical", command=self.output.yview)
-        xscroll = ttk.Scrollbar(out, orient="horizontal", command=self.output.xview)
-        self.output.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
-        self.output.grid(row=0, column=0, sticky="nsew")
-        yscroll.grid(row=0, column=1, sticky="ns")
-        xscroll.grid(row=1, column=0, sticky="ew")
-        self._make_read_only(self.output)
+        text_font = tkfont.nametofont("TkTextFont").copy()  # proportional: easier to read than fixed
+        text_font.configure(size=max(text_font.cget("size"), 14))
+        self.summary = tk.Text(out, wrap="word", font=text_font, height=1, undo=False, relief="flat",
+                               background=self._background())
+        self._make_read_only(self.summary)
+        panes = ttk.PanedWindow(out, orient="horizontal")
+        panes.grid(row=1, column=0, sticky="nsew")
+        self.transcript_title = tk.StringVar(value="Transcript")
+        self.translation_title = tk.StringVar(value="Translation")
+        self.output = self._pane(panes, self.transcript_title, text_font)
+        self.translation = self._pane(panes, self.translation_title, text_font)
 
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.after(100, self._poll)
         root.after(1000, self._tick)
         self._set_icon()
-        if setup.needed():
+        if self._needs_setup:
             self._set_output(setup.INTRO.format(folder=setup.data_dir()))
             self.run_button.configure(text="Set up", command=self.start_setup)
             self.status.set("First start: the tools need to be installed once.")
+
+    def _background(self) -> str:
+        try:
+            return ttk.Style().lookup("TFrame", "background") or "#ececec"
+        except tk.TclError:
+            return "#ececec"
+
+    def _pane(self, panes: ttk.PanedWindow, title: tk.StringVar, font) -> tk.Text:
+        box = ttk.Frame(panes)
+        box.rowconfigure(1, weight=1)
+        box.columnconfigure(0, weight=1)
+        bold = tkfont.nametofont("TkDefaultFont").copy()
+        bold.configure(weight="bold")
+        ttk.Label(box, textvariable=title, font=bold).grid(row=0, column=0, sticky="w", pady=(0, 2))
+        text = tk.Text(box, wrap="word", font=font, undo=False, width=40, padx=6, pady=4, spacing1=1, spacing3=3)
+        yscroll = ttk.Scrollbar(box, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=yscroll.set)
+        text.grid(row=1, column=0, sticky="nsew")
+        yscroll.grid(row=1, column=1, sticky="ns")
+        self._make_read_only(text)
+        panes.add(box, weight=1)
+        return text
 
     def _set_icon(self) -> None:
         icon = setup.bundle_dir() / "icon.png"
@@ -158,18 +212,97 @@ class App:
         if sys.platform == "darwin":
             text.bind("<Control-Button-1>", lambda e: (menu.tk_popup(e.x_root, e.y_root), "break")[1])
 
-    def _set_output(self, value: str) -> None:
-        self.output.delete("1.0", "end")
-        self.output.insert("1.0", value)
+    @staticmethod
+    def _fill(text: tk.Text, value: str) -> None:
+        text.delete("1.0", "end")
+        text.insert("1.0", value)
 
-    def _sync_language(self) -> None:
-        self.language.configure(state="readonly" if self.translate.get() else "disabled")
+    def _set_output(self, value: str) -> None:
+        """A message in the transcript pane (setup, errors); the rest is cleared."""
+        self._set_summary("")
+        self._fill(self.output, value)
+        self._fill(self.translation, "")
+
+    def _set_summary(self, value: str) -> None:
+        self._fill(self.summary, value.rstrip())
+        lines = value.strip().count("\n") + 1 if value.strip() else 0
+        if lines:
+            self.summary.configure(height=min(lines, 8))
+            self.summary.grid(row=0, column=0, sticky="ew", pady=(0, PAD))
+        else:
+            self.summary.grid_remove()
+
+    def _show_result(self, result: Result) -> None:
+        self._set_summary(format_summary(result))
+        self._fill(self.output, format_transcript(result))
+        self._show_translation(result)
+
+    def _show_translation(self, result: Result) -> None:
+        name = language_name(result.translated_to) if result.translated_to else ""
+        self.translation_title.set(f"Translation into {name}" if name else "Translation")
+        hint = "" if not result.transcript.strip() else "Choose a language above and press Translate."
+        self._fill(self.translation, format_translation(result) or hint)
 
     def _language_code(self) -> str | None:
-        if not self.translate.get():
-            return None
         value = self.language.get()
         return value[value.rfind("(") + 1:-1] if "(" in value else None
+
+    def _sync_buttons(self) -> None:
+        idle = self.runner is None
+        self.run_button.configure(state="normal" if idle else "disabled")
+        self.stop_button.configure(state="disabled" if idle else "normal")
+        ready = idle and self.result is not None and bool(self.result.transcript.strip())
+        self.translate_button.configure(state="normal" if ready else "disabled")
+
+    # -- the input's length, for the range slider ------------------------------------------------
+    def _url_changed(self) -> None:
+        if self._info_after is not None:
+            self.root.after_cancel(self._info_after)
+        if self.url.get().strip() != self._info_url:
+            self.slider.set_duration(None, "")
+        self._info_after = self.root.after(INFO_DELAY_MS, self._fetch_info)
+
+    def _fetch_info(self) -> None:
+        self._info_after = None
+        url = self.url.get().strip()
+        if url == self._info_url or self._needs_setup:
+            return
+        if self._info:
+            self._info.cancel()
+            self._info = None
+        self._info_url = url
+        self._info_gen += 1
+        if not looks_like_input(url):
+            self.slider.set_duration(None, "")
+            return
+        self.slider.set_loading()
+        query, gen = InfoQuery(), self._info_gen
+        self._info = query
+
+        def work():
+            try:
+                self.events.put(("info", (gen, query.run(url), None)))
+            except Cancelled:
+                pass
+            except Exception as exc:  # noqa: BLE001 - shown next to the slider
+                self.events.put(("info", (gen, None, str(exc))))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_info(self, gen: int, info: dict | None, error: str | None) -> None:
+        if gen != self._info_gen:
+            return  # an answer for a URL that has been replaced since
+        self._info = None
+        duration = (info or {}).get("duration")
+        if duration:
+            self.slider.set_duration(float(duration), f"of {format_time(float(duration))}")
+            if not self._busy and info.get("title"):
+                self.status.set(f"{info['title']} · {format_time(float(duration))} · nothing downloaded yet: "
+                                "choose a range and press Run (only that part is fetched)")
+        else:
+            self.slider.set_duration(None, "length unknown: whole file")
+            if not self._busy:
+                self.status.set(((error or "") + "; after a run the range can be set").lstrip("; ")[:200])
 
     # -- running ---------------------------------------------------------------------------
     def start(self) -> None:
@@ -179,19 +312,50 @@ class App:
         if not url:
             self.status.set("Paste a URL first.")
             return
-        opts = Options(url=url, kind=self.kind.get(), translate_to=self._language_code(),
-                       accent=self.accent.get())
+        start, end = self.slider.bounds() if url == self._info_url else (None, None)
+        opts = Options(url=url, kind=self.kind.get(), translate_to=self._language_code() if self.translate.get() else None,
+                       accent=self.accent.get(), start=start, end=end)
+        self.result = None
         self._set_output("")
-        self.run_button.configure(state="disabled")
-        self.stop_button.configure(state="normal")
-        self._start_busy()
+        self.transcript_title.set("Transcript" + (f" {format_time(start or 0)}–{format_time(end) if end else 'end'}"
+                                                  if start or end else ""))
+        self.translation_title.set("Translation")
+        self._job = "run"
         self.found_language.set("")
         self.runner = Runner(on_event=lambda kind, value: self.events.put((kind, value)))
+        self._sync_buttons()
+        self._start_busy()
         runner = self.runner
 
         def work():
             try:
-                self.events.put(("done", format_result(runner.run(opts))))
+                self.events.put(("done", runner.run(opts)))
+            except Cancelled:
+                self.events.put(("stopped", None))
+            except StepFailed as exc:
+                self.events.put(("error", str(exc)))
+            except Exception as exc:  # noqa: BLE001 - shown in the window, not a traceback
+                self.events.put(("error", f"{type(exc).__name__}: {exc}"))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def translate_now(self) -> None:
+        """Translate the transcript already shown; a new language replaces the translation."""
+        to = self._language_code()
+        if self.runner is not None or self.result is None or not to:
+            return
+        result = dataclasses.replace(self.result)
+        self._job = "translate"
+        self.runner = Runner(on_event=lambda kind, value: self.events.put((kind, value)))
+        runner = self.runner
+        self._sync_buttons()
+        self._start_busy()
+        self.translation_title.set(f"Translation into {language_name(to)}")
+        self._fill(self.translation, "")
+
+        def work():
+            try:
+                self.events.put(("translated", runner.translate(result, to)))
             except Cancelled:
                 self.events.put(("stopped", None))
             except StepFailed as exc:
@@ -207,13 +371,20 @@ class App:
             self.status.set("Stopping...")
 
     def copy_all(self) -> None:
+        if self.result is not None:
+            text = format_result(self.result)
+        else:
+            text = "\n\n".join(t for t in (self.output.get("1.0", "end-1c").strip(),
+                                            self.translation.get("1.0", "end-1c").strip()) if t) + "\n"
         self.root.clipboard_clear()
-        self.root.clipboard_append(self.output.get("1.0", "end-1c"))
+        self.root.clipboard_append(text)
         self.status.set("Copied to the clipboard.")
 
     def close(self) -> None:
         if self.runner:
             self.runner.cancel()
+        if self._info:
+            self._info.cancel()
         self.root.destroy()
 
     # -- progress: step, bar (determinate with a percentage, animated without), clock ----------
@@ -227,9 +398,9 @@ class App:
     def _stop_busy(self, kind: str) -> None:
         self._busy = False
         self.bar.stop()
-        self.bar.configure(mode="determinate", value=100 if kind in ("done", "setup-done") else 0)
+        self.bar.configure(mode="determinate", value=100 if kind in ("done", "translated", "setup-done") else 0)
         took = _clock(time.monotonic() - self._run_started)
-        self.step_text.set({"done": "Finished", "setup-done": "Set up finished",
+        self.step_text.set({"done": "Finished", "translated": "Translated", "setup-done": "Set up finished",
                             "stopped": "Stopped"}.get(kind, "Failed"))
         self.clock.set(f"took {took}")
 
@@ -294,12 +465,23 @@ class App:
                 if kind == "progress":
                     self._on_progress(*value)
                     continue
+                if kind == "info":
+                    self._on_info(*value)
+                    continue
+                if kind == "duration":
+                    # --info gave no length: the run did, so the next run can use a range
+                    if self.slider.range is None and self.url.get().strip() == self._info_url:
+                        self.slider.set_duration(value, f"of {format_time(value)}")
+                    continue
                 self._stop_busy(kind)
                 if kind == "setup-done":
+                    self._needs_setup = False
                     self.run_button.configure(text="Run", command=self.start, state="normal")
                     self._set_output("Ready. Paste a URL and press Run.\n\nThe first run of each feature "
                                      "downloads its model; the status line shows the progress.\n")
                     self.status.set("Setup finished.")
+                    self._info_url = ""
+                    self._fetch_info()
                     continue
                 if kind == "setup-failed":
                     self.run_button.configure(state="normal")
@@ -307,17 +489,27 @@ class App:
                                      "press “Set up” to try again; finished parts are kept.\n")
                     self.status.set("Setup failed.")
                     continue
+                job, self._job = self._job, ""
                 self.runner = None
-                self.run_button.configure(state="normal")
-                self.stop_button.configure(state="disabled")
                 if kind == "done":
-                    self._set_output(value)
+                    self.result = value
+                    self._show_result(value)
                     self.status.set("Done.")
+                elif kind == "translated":
+                    self.result = value
+                    self._show_translation(value)
+                    self.status.set(f"Translated into {language_name(value.translated_to)}.")
                 elif kind == "stopped":
                     self.status.set("Stopped.")
+                    if job == "translate" and self.result is not None:
+                        self._show_translation(self.result)
+                elif job == "translate":
+                    self._fill(self.translation, f"error: {value}\n")  # the transcript stays
+                    self.status.set("Translation failed.")
                 else:
                     self._set_output(f"error: {value}\n")
                     self.status.set("Failed.")
+                self._sync_buttons()
         except queue.Empty:
             pass
         self.root.after(100, self._poll)

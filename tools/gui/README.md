@@ -13,19 +13,27 @@ Or download the app (no Python, uv or terminal needed) from the
 `Language-…-windows-x64.exe`. Install steps for users are in
 [RELEASE_NOTES.md](packaging/RELEASE_NOTES.md).
 
-| Option | Runs |
+| Control | Runs |
 | --- | --- |
-| Speech | `transcribe URL --mode speech` |
-| Song | `vocals URL -o vocals.wav`, then `transcribe vocals.wav --mode song` |
-| Translate to … | the transcript piped into `translate --to XX` (original and translation side by side): through Ollama when it runs with `gemma4:12b`, otherwise offline with NLLB and a note saying how to get the better one |
-| Accent recognition | `accent` on the URL (speech) or the separated vocals (song); skipped with a note when transcribe detects a language other than English |
+| URL | after typing stops, `transcribe URL --info` in the background: title and length only, nothing is downloaded |
+| Range | a two-handle slider over that length (drag, click the track, arrow keys; Shift: 10 s) and two time fields (`m:ss`, `h:mm:ss`). Narrowed, it adds `--start`/`--end`; otherwise the whole file is used. If the length cannot be read (older tools, a live stream), the slider stays off until a run reports it |
+| Speech | `transcribe URL [--start --end] --mode speech` |
+| Song | `vocals URL [--start --end] -o vocals.wav`, then `transcribe vocals.wav --mode song` (the vocals WAV says where it begins, so timestamps match the video) |
+| Accent recognition | `accent` on the URL with the range (speech) or on the separated vocals (song); without a range a video is capped at its first 10 minutes; skipped with a note when transcribe detects a language other than English |
+| Translate to … · **Translate** | the transcript already shown, piped into `translate --to XX --from <detected> --only-translation`; no new transcription. Translating again replaces the translation. Through Ollama when it runs with `gemma4:12b`, otherwise offline with NLLB and a note saying how to get the better one |
+| also right after each run | the same translation as the last step of **Run** |
 
-- The result box can be scrolled, selected and copied (⌘C / Ctrl+C, right-click, **Copy all**),
-  not edited.
+Only **Run** downloads and processes; with a range only that part is fetched (unless fetching the
+whole audio is faster, see [ingest](../../packages/ingest)). The result shows the language and
+accent on top, the transcript and the translation side by side in two panes.
+
+- The result panes can be scrolled, selected and copied (⌘C / Ctrl+C, right-click, **Copy all**
+  for everything), not edited.
 - The status line shows the running tool's latest stderr line (progress, language, mode);
   **Stop** kills the running tool. A failing tool's `error:` line is shown in the result box.
 - Standard library only (Tkinter): each tool runs as a subprocess in its own environment, so the
-  window never loads a model. A tool is found on `PATH` (`uv tool install --editable ./tools/<tool>`),
+  window never loads a model. The packaged app uses the tools its setup installed; from source a
+  tool is found on `PATH` (`uv tool install --editable ./tools/<tool>`),
   otherwise run from this workspace with `uv run --package <tool>`.
 - Tkinter comes with the python.org and uv-managed Pythons; on Linux it may need
   `sudo apt install python3-tk`.
