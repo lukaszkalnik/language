@@ -15,7 +15,9 @@ vocals song.mp3 --model htdemucs            # ~3x faster, slightly lower quality
 - All stems are cached in the shared cache (keyed by input, range and model), so a second run,
   or asking for another `--stem` of the same song, is instant. `--no-cache` recomputes.
 - The output WAV carries a RIFF INFO tag (`ISFT=vocals/<model>/<stem>`) so `transcribe` knows
-  its input is already separated.
+  its input is already separated. A section (`--start`) also gets `IOFS=<seconds>`, where it
+  begins in the original, so `vocals URL --start 1:00 | transcribe -` (and `accent`) give
+  timestamps that match the video.
 
 ## Models
 

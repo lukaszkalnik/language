@@ -285,14 +285,16 @@ def run(opts: Options) -> Result:
                 status(f"Speakers: {len(names)} ({', '.join(names)})")
         duration = reader.duration
 
-    # Timestamps in the original timeline (a --start offset is added back).
-    if src.start:
+    # Timestamps in the original timeline: a --start offset is added back, and so is the place
+    # in the recording of a section that vocals separated (its WAV says where it begins).
+    shift = src.timeline_start
+    if shift:
         for seg in segments:
-            seg.start += src.start
-            seg.end += src.start
+            seg.start += shift
+            seg.end += shift
             for w in seg.words:
-                w.start += src.start
-                w.end += src.start
+                w.start += shift
+                w.end += shift
     if dropped:
         reasons: dict[str, int] = {}
         for _, why in dropped:

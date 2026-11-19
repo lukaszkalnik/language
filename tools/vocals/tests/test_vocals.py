@@ -90,3 +90,16 @@ def test_bad_stem_is_one_error_line(monkeypatch, tmp_path, capsys):
     assert cli.main([str(tmp_path / "x.mp3"), "--stem", "piano"]) == 2
     err = capsys.readouterr().err
     assert err.startswith("vocals: error:") and err.count("\n") == 1
+
+
+def test_cached_section_stems_get_their_place_in_the_recording():
+    src = _src(start=60.0, end=120.0)
+    tag = cache_tag("htdemucs_ft", 1)
+    for stem in [*separate.MODELS["htdemucs_ft"].stems, "no_vocals"]:  # cached by an older version
+        path = separate.stem_path(src, tag, stem)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        audio.write_wav(path, np.zeros(800, dtype=np.float32), 8000)
+    paths = separate.separate(src, "htdemucs_ft")
+    assert audio.wav_origin(paths["vocals"]) == 60.0
+    separate.separate(src, "htdemucs_ft")  # tagged once, not again
+    assert list(audio.read_wav_tags(paths["vocals"])) == [audio.ORIGIN_TAG]

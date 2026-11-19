@@ -101,6 +101,9 @@ def separate(src: Source, model: str, device: str = "auto", use_cache: bool = Tr
     tag = cache_tag(model, shifts)
     paths = {s: stem_path(src, tag, s) for s in wanted}
     if use_cache and all(p.exists() and p.stat().st_size > 44 for p in paths.values()):
+        if src.timeline_start and not audio.wav_origin(paths["vocals"]):
+            for p in paths.values():  # cached before stems carried their place in the recording
+                audio.add_wav_tags(p, {audio.ORIGIN_TAG: f"{src.timeline_start:.3f}"})
         return paths
 
     quiet_libraries("demucs")
@@ -150,6 +153,9 @@ def separate(src: Source, model: str, device: str = "auto", use_cache: bool = Tr
         else:
             tmp.replace(final_tmp)
         title = src.info.title if src.info is not None else src.label
-        audio.add_wav_tags(final_tmp, {"ISFT": f"vocals/{model}/{name}", "INAM": title or "", "ISRC": src.source_id})
+        tags = {"ISFT": f"vocals/{model}/{name}", "INAM": title or "", "ISRC": src.source_id}
+        if src.timeline_start:
+            tags[audio.ORIGIN_TAG] = f"{src.timeline_start:.3f}"
+        audio.add_wav_tags(final_tmp, tags)
         final_tmp.replace(paths[name])
     return paths

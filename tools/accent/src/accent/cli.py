@@ -62,7 +62,7 @@ def analyse(args: argparse.Namespace) -> dict:
     classifier.load()
     status(f"Classifying {len(speech)} chunk(s) of ~20 s ({len(chunks) - len(speech)} silent skipped)...")
 
-    offset = src.start
+    offset = src.timeline_start
     rows, per_chunk = [], []
     for n, chunk in enumerate(chunks):
         report_progress("Recognising the accent", n / len(chunks))

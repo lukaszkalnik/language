@@ -27,6 +27,12 @@ class Source:
     from_cache: bool = False
     label: str = ""
     extra: dict = field(default_factory=dict)
+    origin: float = 0.0  # where `path`'s 0:00 lies in the original recording (vocals' ORIGIN_TAG)
+
+    @property
+    def timeline_start(self) -> float:
+        """Where this input's range begins in the original recording: add it to output timestamps."""
+        return self.origin + self.start
 
     def key(self, *extra: str) -> str:
         """Cache key for something derived from this input and range, plus tool settings."""
@@ -47,6 +53,8 @@ class Source:
 
     def describe(self) -> dict:
         data: dict = {"type": self.kind, "id": self.source_id, "range": {"start": self.start, "end": self.end, "capped": self.capped}}
+        if self.origin:
+            data["range"]["origin"] = self.origin  # the file is a section beginning here in the original
         if self.info is not None:
             data.update(url=youtube.watch_url(self.info.id), title=self.info.title,
                         channel=self.info.channel, duration=self.info.duration, from_cache=self.from_cache)
@@ -89,7 +97,8 @@ def open_input(
         if stdin is None and sys.stdin.isatty():
             raise AudioError("`-` reads a WAV stream from stdin, but stdin is a terminal; pipe audio in")
         path, digest = _read_stdin(stream, use_cache)
-        return Source("stdin", path, f"stdin-{digest}", start or 0.0, end, start, end, label="stdin")
+        return Source("stdin", path, f"stdin-{digest}", start or 0.0, end, start, end, label="stdin",
+                      origin=audio.wav_origin(path))
 
     if youtube.looks_like_url(arg):
         def on_info(info, begin, finish, capped):
@@ -116,7 +125,8 @@ def open_input(
     path = Path(arg).expanduser()
     if not path.is_file():
         raise AudioError(f"file not found: {arg}")
-    return Source("file", path, f"file-{cache.file_hash(path)}", start or 0.0, end, start, end, label=path.name)
+    return Source("file", path, f"file-{cache.file_hash(path)}", start or 0.0, end, start, end, label=path.name,
+                  origin=audio.wav_origin(path))
 
 
 def input_info(arg: str, use_cache: bool = True, ipv4: bool = False) -> dict:

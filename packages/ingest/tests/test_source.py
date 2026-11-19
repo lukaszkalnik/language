@@ -171,3 +171,24 @@ def test_input_info_of_a_video_uses_metadata_only(monkeypatch):
     assert info == {"type": "youtube", "id": "dQw4w9WgXcQ", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                     "title": "Title", "channel": "Channel", "duration": 212.0}
     assert calls == ["https://youtu.be/dQw4w9WgXcQ"]
+
+
+@needs_ffmpeg
+def test_section_wav_keeps_its_place_in_the_recording(tmp_path):
+    wav = tmp_path / "section.wav"
+    audio.write_wav(wav, _sine(2.0), 8000)
+    assert source.open_input(str(wav)).timeline_start == 0.0
+    audio.add_wav_tags(wav, {audio.ORIGIN_TAG: "60.000"})
+    src = source.open_input(str(wav), start=0.5)
+    assert (src.origin, src.timeline_start) == (60.0, 60.5)
+    assert src.describe()["range"]["origin"] == 60.0
+    with open(wav, "rb") as fh:
+        piped = source.open_input("-", stdin=fh)
+    assert piped.timeline_start == 60.0
+
+
+def test_wav_origin_ignores_bad_values(tmp_path):
+    wav = tmp_path / "x.wav"
+    audio.write_wav(wav, _sine(0.1), 8000)
+    audio.add_wav_tags(wav, {audio.ORIGIN_TAG: "soon"})
+    assert audio.wav_origin(wav) == 0.0

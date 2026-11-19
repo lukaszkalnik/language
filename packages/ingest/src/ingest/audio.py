@@ -194,6 +194,18 @@ def rms_dbfs(samples: np.ndarray) -> float:
 # --- WAV metadata (RIFF LIST/INFO), so tools can pass facts down a pipe -----------------
 # vocals writes e.g. ISFT="vocals/htdemucs_ft/vocals" and INAM=<video title>; transcribe reads
 # it to know its input is already separated. ffmpeg and the wave module ignore the chunk.
+# ORIGIN_TAG (our own key) says where the file's 0:00 lies in the original recording, so a
+# section separated with --start keeps its timestamps: `vocals --start 60 | transcribe -`.
+ORIGIN_TAG = "IOFS"
+
+
+def wav_origin(path: Path) -> float:
+    """Seconds into the original recording at which this WAV begins (0 without the tag)."""
+    try:
+        return max(0.0, float(read_wav_tags(path).get(ORIGIN_TAG) or 0))
+    except ValueError:
+        return 0.0
+
 
 def add_wav_tags(path: Path, tags: dict[str, str]) -> None:
     """Append a LIST/INFO chunk to a WAV file. Keys are 4-letter RIFF INFO IDs (INAM, ISFT, ICMT...)."""
