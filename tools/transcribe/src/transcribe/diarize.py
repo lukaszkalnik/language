@@ -14,7 +14,7 @@ import sys
 import numpy as np
 
 from ingest.cache import cache_dir
-from ingest.models import announce_hf_download, pick_device, quiet_libraries
+from ingest.models import announce_hf_download, hf_is_cached, load_cached_first, pick_device, quiet_libraries
 
 PYANNOTE_MODEL = "pyannote/speaker-diarization-community-1"
 ECAPA_MODEL = "speechbrain/spkrec-ecapa-voxceleb"
@@ -65,8 +65,10 @@ def pyannote_turns(wav_path, num_speakers: int | None, device: str) -> list[tupl
         _status(f"pyannote.audio could not be imported ({exc}); using the built-in method.")
         return None
     try:
-        announce_hf_download(PYANNOTE_MODEL, "config.yaml", what="pyannote diarization model")
-        pipeline = Pipeline.from_pretrained(PYANNOTE_MODEL, token=token)
+        cached = hf_is_cached(PYANNOTE_MODEL, "config.yaml")
+        if not cached:
+            announce_hf_download(PYANNOTE_MODEL, "config.yaml", what="pyannote diarization model")
+        pipeline = load_cached_first(lambda: Pipeline.from_pretrained(PYANNOTE_MODEL, token=token), cached)
     except Exception as exc:
         text = str(exc).lower()
         if any(k in text for k in ("401", "403", "gated", "access", "authenticat", "accept")):

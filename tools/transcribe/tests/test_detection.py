@@ -160,3 +160,29 @@ def test_pyannote_telemetry_is_off_unless_the_user_turned_it_on(monkeypatch):
     monkeypatch.setenv("PYANNOTE_METRICS_ENABLED", "true")
     no_pyannote_telemetry()
     assert os.environ["PYANNOTE_METRICS_ENABLED"] == "true"
+
+
+def test_cached_pyannote_pipeline_loads_with_the_hub_offline_first(monkeypatch, capsys):
+    import sys
+    import types
+
+    from huggingface_hub import constants
+
+    from transcribe import diarize
+
+    offline = []
+
+    class Pipeline:
+        @staticmethod
+        def from_pretrained(repo, token=None):
+            offline.append(constants.HF_HUB_OFFLINE)
+            raise OSError("a file is missing")
+
+    fake = types.ModuleType("pyannote.audio")
+    fake.Pipeline = Pipeline
+    monkeypatch.setitem(sys.modules, "pyannote.audio", fake)
+    monkeypatch.setattr(diarize, "hf_token", lambda: "token")
+    monkeypatch.setattr(diarize, "hf_is_cached", lambda *a, **k: True)
+    assert diarize.pyannote_turns("x.wav", None, "cpu") is None
+    assert offline == [True, False]  # offline from the cache, then online for the missing file
+    assert "using the built-in method" in capsys.readouterr().err
