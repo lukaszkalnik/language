@@ -10,12 +10,9 @@ important changes first. The section for a release opens its GitHub release note
   most misheard words are now right, and a chorus that used to go missing is back. The
   first Swedish run downloads 3.2 GB once. On a Mac it takes about twice as long as before and
   needs about 6 GB of memory. To use the old model, pass `--model large-v3`.
+- **Fewer gaps in songs.** Singing that the first pass skipped is now transcribed again on its own.
 - Mac: fixed a fault in timing that could put a stray "!" into a line and switch off the checks
   for made-up text and the retries on uncertain passages.
-- A short line that starts a new sung line is no longer glued to the end of the line before it.
-- Mac: fixed a fault in timing that could put a stray "!" into a line and switch off the checks
-  for made-up text and the retries on uncertain passages.
-- A short line that starts a new sung line is no longer glued to the end of the line before it.
 - A short line that starts a new sung line is no longer glued to the end of the line before it.
 - **Songs no longer lose their first lines.** On a song with an instrumental intro, the
   transcription could start with a made-up subtitle credit (e.g. "Svensktextning.nu") and skip

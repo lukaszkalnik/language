@@ -208,6 +208,64 @@ def song_clips(voice: list[tuple[float, float]], duration: float) -> list[tuple[
     return [(max(0.0, a - SONG_PAD), min(duration, b + SONG_PAD)) for a, b in merged]
 
 
+LOST_MIN = 1.5  # shorter stretches are breaths and ad-libs, not lost lines
+LOST_COVERED = 0.5  # a stretch counts as lost when lines cover less than this fraction of it
+
+
+def _overlap(a: float, b: float, spans) -> float:
+    return sum(max(0.0, min(b, e) - max(a, s)) for s, e in spans)
+
+
+def lost_stretches(voice: list[tuple[float, float]], lines_: list[Segment], duration: float) -> list[tuple[float, float]]:
+    """Sung stretches that no transcribed line covers, padded and merged, to transcribe again.
+
+    Inside a whole song Whisper sometimes skips a passage (it writes a made-up line and jumps
+    past the singing before it); on its own the passage usually comes out right.
+    """
+    spans = [(ln.start, ln.end) for ln in lines_]
+    lost = [(a, b) for a, b in sorted(voice)
+            if b - a >= LOST_MIN and _overlap(a, b, spans) < LOST_COVERED * (b - a)]
+    return song_clips(lost, duration) or []
+
+
+def add_missing(lines_: list[Segment], extra: list[Segment]) -> list[Segment]:
+    """Lines of the second pass that fill gaps: those mostly outside the lines already there."""
+    spans = [(ln.start, ln.end) for ln in lines_]
+    new = [ln for ln in extra if _overlap(ln.start, ln.end, spans) < LOST_COVERED * max(ln.duration, 1e-6)]
+    return sorted(lines_ + new, key=lambda ln: ln.start)
+
+
+def transcribe_lost(model, reader, stretches, language: str, workdir: Path, use_cache: bool, suffix: str = ""):
+    """Second pass: each lost stretch transcribed on its own. Cached with the stretches it covers."""
+    path = workdir / f"song-lost{suffix}.json"
+    key = [[round(a, 2), round(b, 2)] for a, b in stretches]
+    if use_cache and path.exists():
+        try:
+            cached = json.loads(path.read_text(encoding="utf-8"))
+            if cached.get("stretches") == key:
+                return [Segment.from_dict(d) for d in cached["segments"]]
+        except ValueError:
+            pass
+    where = ", ".join(f"{format_seconds(a)}-{format_seconds(b)}" for a, b in stretches)
+    status(f"Listening again to {len(stretches)} stretch(es) of singing no line covers: {where}")
+    out: list[Segment] = []
+    for a, b in stretches:
+        segs, _ = model.transcribe(reader.read(a, b), language, offset=a)
+        out += segs
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"stretches": key, "segments": [s.to_dict(words=True) for s in out]},
+                              ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
+    return out
+
+
+def song_lines(kept: list[Segment]) -> list[Segment]:
+    segments = lines.split_lines(kept)
+    for line in segments:  # confidence per sung line, not per Whisper segment
+        hallucination.score(line)
+    return hallucination.collapse_line_loops(segments)
+
+
 def transcribe_song(model, reader, voice, language: str, separated: bool, workdir: Path, use_cache: bool,
                     suffix: str = ""):
     path = workdir / f"song-clips{suffix}.json"  # not song.json: earlier results came from the whole audio
@@ -292,10 +350,15 @@ def run(opts: Options) -> Result:
         if chosen == "song":
             raw = transcribe_song(model, reader, voice, report.main, separated, workdir, opts.use_cache, suffix)
             kept, dropped = hallucination.filter_segments(raw, voice if separated else None)
-            segments = lines.split_lines(kept)
-            for line in segments:  # confidence per sung line, not per Whisper segment
-                hallucination.score(line)
-            segments = hallucination.collapse_line_loops(segments)
+            segments = song_lines(kept)
+            lost = lost_stretches(voice, segments, reader.duration) if separated else []
+            if lost:
+                extra = transcribe_lost(model, reader, lost, report.main, workdir, opts.use_cache, suffix)
+                kept2, dropped2 = hallucination.filter_segments(extra, voice)
+                before = len(segments)
+                segments = add_missing(segments, song_lines(kept2))
+                dropped += dropped2
+                status(f"Second pass: {len(segments) - before} line(s) added.")
         else:
             raw = transcribe_speech(model, reader, voice, report, workdir, opts.use_cache, opts.language, suffix)
             segments, dropped = hallucination.filter_segments(raw, voice)
