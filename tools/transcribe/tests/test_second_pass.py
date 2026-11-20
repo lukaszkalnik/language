@@ -16,3 +16,9 @@ def test_second_pass_only_adds_lines_in_gaps():
     first = [seg("one", 10, 14), seg("two", 20, 24)]
     extra = [seg("again two", 20.5, 23.5), seg("new", 2, 5)]
     assert [ln.text for ln in add_missing(first, extra)] == ["new", "one", "two"]
+
+
+def test_second_pass_drops_guesses():
+    first = [seg("one", 10, 14)]
+    extra = [seg("Michael Jackson", 0.1, 2.6, confidence=0.06), seg("real line", 20, 23, confidence=0.7)]
+    assert [ln.text for ln in add_missing(first, extra)] == ["one", "real line"]

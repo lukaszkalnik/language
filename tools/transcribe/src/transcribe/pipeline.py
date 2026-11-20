@@ -210,6 +210,7 @@ def song_clips(voice: list[tuple[float, float]], duration: float) -> list[tuple[
 
 LOST_MIN = 1.5  # shorter stretches are breaths and ad-libs, not lost lines
 LOST_COVERED = 0.5  # a stretch counts as lost when lines cover less than this fraction of it
+SECOND_PASS_CONFIDENCE = 0.3  # a lost stretch heard again: lines less sure than this are guesses
 
 
 def _overlap(a: float, b: float, spans) -> float:
@@ -229,9 +230,11 @@ def lost_stretches(voice: list[tuple[float, float]], lines_: list[Segment], dura
 
 
 def add_missing(lines_: list[Segment], extra: list[Segment]) -> list[Segment]:
-    """Lines of the second pass that fill gaps: those mostly outside the lines already there."""
+    """Lines of the second pass that fill gaps: mostly outside the lines already there, and not
+    mere guesses (on a stretch it skipped once, Whisper often writes a name or noise word)."""
     spans = [(ln.start, ln.end) for ln in lines_]
-    new = [ln for ln in extra if _overlap(ln.start, ln.end, spans) < LOST_COVERED * max(ln.duration, 1e-6)]
+    new = [ln for ln in extra if _overlap(ln.start, ln.end, spans) < LOST_COVERED * max(ln.duration, 1e-6)
+           and ln.confidence >= SECOND_PASS_CONFIDENCE]
     return sorted(lines_ + new, key=lambda ln: ln.start)
 
 
