@@ -8,6 +8,7 @@ SpeechBrain ECAPA speaker embeddings (speechbrain/spkrec-ecapa-voxceleb, not gat
 
 from __future__ import annotations
 
+import os
 import sys
 
 import numpy as np
@@ -33,8 +34,6 @@ def _status(message: str) -> None:
 
 
 def hf_token() -> str | None:
-    import os
-
     if os.environ.get("HF_TOKEN"):
         return os.environ["HF_TOKEN"]
     try:
@@ -47,6 +46,11 @@ def hf_token() -> str | None:
 
 # --- pyannote ---------------------------------------------------------------------
 
+def no_pyannote_telemetry() -> None:
+    """pyannote sends usage data to otel.pyannote.ai unless told not to; it reads this on import."""
+    os.environ.setdefault("PYANNOTE_METRICS_ENABLED", "false")
+
+
 def pyannote_turns(wav_path, num_speakers: int | None, device: str) -> list[tuple[float, float, str]] | None:
     """Turns from pyannote, or None (after explaining the setup) if the model is not accessible."""
     token = hf_token()
@@ -54,6 +58,7 @@ def pyannote_turns(wav_path, num_speakers: int | None, device: str) -> list[tupl
         _status(SETUP)
         return None
     quiet_libraries("pyannote", "speechbrain")
+    no_pyannote_telemetry()
     try:
         from pyannote.audio import Pipeline
     except Exception as exc:  # pragma: no cover - broken install

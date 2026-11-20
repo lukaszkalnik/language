@@ -146,3 +146,17 @@ def test_split_region_without_cut_finder_is_even_and_bounded():
     assert split_region(0, 60, 28) == [(0, 20), (20, 40), (40, 60)]
     weird = split_region(0, 60, 28, cut_at=lambda lo, hi: -5)  # a bad cut is clamped into range
     assert all(b - a <= 28 for a, b in weird) and weird[-1][1] == 60
+
+
+
+def test_pyannote_telemetry_is_off_unless_the_user_turned_it_on(monkeypatch):
+    import os
+
+    from transcribe.diarize import no_pyannote_telemetry
+
+    monkeypatch.delenv("PYANNOTE_METRICS_ENABLED", raising=False)
+    no_pyannote_telemetry()
+    assert os.environ["PYANNOTE_METRICS_ENABLED"] == "false"
+    monkeypatch.setenv("PYANNOTE_METRICS_ENABLED", "true")
+    no_pyannote_telemetry()
+    assert os.environ["PYANNOTE_METRICS_ENABLED"] == "true"

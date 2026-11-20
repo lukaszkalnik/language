@@ -25,6 +25,8 @@ important changes first. The section for a release opens its GitHub release note
   what they do: transcription, song vocals, accent recognition, translation) and lists each
   model's download size on its own line.
 - Lists in the window keep their indent when a line wraps, so they are easier to read.
+- Speaker labels no longer send usage data to pyannote's servers (pyannote.audio does that by
+  default). To allow it, set `PYANNOTE_METRICS_ENABLED=true`.
 
 ## 0.3.1
 

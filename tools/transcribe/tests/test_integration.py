@@ -21,3 +21,16 @@ def test_short_video_speech_json(tmp_path):
     assert data["language"] == "en" and data["mode"] == "speech"
     assert "elephant" in " ".join(s["text"] for s in data["segments"]).lower()
     assert "Mode: speech" in proc.stderr
+
+
+def test_pyannote_reads_telemetry_switch():
+    """No network needed, but importing pyannote takes seconds, so it is kept out of the unit tests."""
+    import os
+
+    code = ("from transcribe.diarize import no_pyannote_telemetry\n"
+            "no_pyannote_telemetry()\n"
+            "from pyannote.audio.telemetry.metrics import is_metrics_enabled\n"
+            "print(is_metrics_enabled())\n")
+    env = {k: v for k, v in os.environ.items() if k != "PYANNOTE_METRICS_ENABLED"}
+    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
+    assert out.stdout.strip() == "False", out.stderr
