@@ -5,9 +5,16 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
-- **A warning for mixed languages.** When you tell `transcribe` the language with
-  `--language`, it now still checks the recording and warns if other languages seem to be
-  spoken too, with where they were found, since everything is transcribed in the chosen one.
+- **Choose the spoken language in the window.** A new "Spoken language" selector next to
+  Speech/Song: leave it on Automatic, or pick the language when detection gets it wrong, as it
+  often does with rare languages, short clips and songs. The transcript is then made in that
+  language (Swedish with its own model) and translated from it. The window remembers your choice,
+  and greys out accent recognition while a language other than English is chosen. On the command
+  line this is `transcribe --language xx`, as before.
+- **A warning for mixed languages.** With a chosen language, the recording is still checked: if
+  other languages seem to be spoken too, you get a note saying which and where, since everything
+  is transcribed in the chosen one. Choose Automatic for such recordings: it gives each passage
+  its own language.
 - **Much better Swedish.** Swedish songs and speech are now transcribed with KB-Whisper, a
   Whisper the National Library of Sweden trained on 50,000 hours of Swedish. In our test songs
   most misheard words are now right, and a chorus that used to go missing is back. The

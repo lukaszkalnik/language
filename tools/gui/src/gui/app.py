@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
-from . import setup
+from . import settings, setup
 from .pipeline import (
     LANGUAGES,
     Cancelled,
@@ -21,12 +21,17 @@ from .pipeline import (
     Result,
     Runner,
     StepFailed,
+    accent_possible,
+    choice_code,
+    choice_for,
     format_result,
     format_summary,
     format_transcript,
     format_translation,
+    jump_choice,
     language_name,
     looks_like_input,
+    spoken_choices,
 )
 from .rangeslider import RangeSlider
 from .timerange import format_time
@@ -50,7 +55,7 @@ class App:
         self._info_after: str | None = None
         root.title("Language")
         root.geometry("1000x700")
-        root.minsize(640, 460)
+        root.minsize(760, 460)
 
         frame = ttk.Frame(root, padding=PAD)
         frame.pack(fill="both", expand=True)
@@ -71,15 +76,25 @@ class App:
 
         opts = ttk.Frame(frame)
         opts.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(PAD, 0))
-        self.kind = tk.StringVar(value="speech")
-        ttk.Radiobutton(opts, text="Speech", value="speech", variable=self.kind).pack(side="left")
-        ttk.Radiobutton(opts, text="Song", value="song", variable=self.kind).pack(side="left", padx=(PAD, 3 * PAD))
-        self.accent = tk.BooleanVar(value=False)
-        ttk.Checkbutton(opts, text="Accent recognition (English only)", variable=self.accent).pack(side="left")
+        # Run and Stop first, so a narrow window squeezes the options rather than the buttons.
         self.stop_button = ttk.Button(opts, text="Stop", command=self.stop, state="disabled")
         self.stop_button.pack(side="right")
         self.run_button = ttk.Button(opts, text="Run", command=self.start)
         self.run_button.pack(side="right", padx=PAD)
+        self.kind = tk.StringVar(value="speech")
+        ttk.Radiobutton(opts, text="Speech", value="speech", variable=self.kind).pack(side="left")
+        ttk.Radiobutton(opts, text="Song", value="song", variable=self.kind).pack(side="left", padx=(PAD, 2 * PAD))
+        ttk.Label(opts, text="Spoken language").pack(side="left")
+        self.spoken_names = spoken_choices()
+        self.spoken = ttk.Combobox(opts, values=self.spoken_names, state="readonly", width=18)
+        self.spoken.set(choice_for(settings.load().get("spoken_language")))
+        self.spoken.pack(side="left", padx=(4, 2 * PAD))
+        self.spoken.bind("<<ComboboxSelected>>", lambda e: self._spoken_changed())
+        self.spoken.bind("<KeyPress>", self._spoken_key)
+        self.accent = tk.BooleanVar(value=False)
+        self.accent_check = ttk.Checkbutton(opts, text="Accent (English only)", variable=self.accent)
+        self.accent_check.pack(side="left")
+        self._sync_accent()
 
         tr = ttk.Frame(frame)
         tr.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(PAD, 0))
@@ -256,6 +271,27 @@ class App:
         hint = "" if not result.transcript.strip() else "Choose a language above and press Translate."
         self._fill(self.translation, format_translation(result) or hint)
 
+    def _spoken_code(self) -> str | None:
+        return choice_code(self.spoken.get())
+
+    def _spoken_changed(self) -> None:
+        self.spoken.selection_clear()
+        settings.save({"spoken_language": self._spoken_code()})
+        self._sync_accent()
+
+    def _spoken_key(self, event) -> str | None:
+        """A letter jumps to the next language starting with it (the list is long)."""
+        found = jump_choice(self.spoken_names, self.spoken.get(), event.char)
+        if found is None:
+            return None
+        self.spoken.set(found)
+        self._spoken_changed()
+        return "break"
+
+    def _sync_accent(self) -> None:
+        """Accent recognition is for English: greyed out while another language is chosen."""
+        self.accent_check.configure(state="normal" if accent_possible(self._spoken_code()) else "disabled")
+
     def _language_code(self) -> str | None:
         value = self.language.get()
         return value[value.rfind("(") + 1:-1] if "(" in value else None
@@ -327,7 +363,7 @@ class App:
             return
         start, end = self.slider.bounds() if url == self._info_url else (None, None)
         opts = Options(url=url, kind=self.kind.get(), translate_to=self._language_code() if self.translate.get() else None,
-                       accent=self.accent.get(), start=start, end=end)
+                       language=self._spoken_code(), accent=self.accent.get(), start=start, end=end)
         self.result = None
         self._set_output("")
         self.transcript_title.set("Transcript" + (f" {format_time(start or 0)}–{format_time(end) if end else 'end'}"

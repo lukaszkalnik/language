@@ -23,7 +23,14 @@ FAKE = textwrap.dedent("""
         print("Separating... 100%", file=sys.stderr)
     elif tool == "transcribe":
         print("Audio: 2:05", file=sys.stderr)
-        print(f"Language: {lang} (98%)", file=sys.stderr)
+        if "--language" in args:
+            print(f"Language: {args[args.index('--language') + 1]} (set with --language)", file=sys.stderr)
+            if __import__("os").environ.get("FAKE_MIXED"):
+                print("Warning: other languages may be spoken (detected en 60% at 0:10, 1:30; de 40% at 0:50, "
+                      "in 3 window(s)): everything is transcribed as br; without --language each passage "
+                      "gets its own language", file=sys.stderr)
+        else:
+            print(f"Language: {lang} (98%)", file=sys.stderr)
         print("@progress 0.500 Transcribing", file=sys.stderr)
         print("hello world")
     elif tool == "translate":
@@ -206,7 +213,7 @@ def test_parse_line():
 def test_describe_language():
     assert pipeline.describe_language("Language: br (81%); also found: fr (19%)") == (
         "Breton (br, 81%); also French (fr, 19%)")
-    assert pipeline.describe_language("Language: de (set with --language)") == "German (de)"
+    assert pipeline.describe_language("Language: de (set with --language)") == "German (de, chosen)"
     assert pipeline.describe_language("Language: xx (50%)") == "xx (xx, 50%)"
     assert pipeline.describe_language("Mode: speech") is None
 
@@ -233,3 +240,70 @@ def test_old_tools_without_info_get_a_clear_message():
     assert "older than this window" in pipeline.explain_info_error(
         "transcribe: error: unrecognized arguments: --info")
     assert pipeline.explain_info_error("x: error: private") == "x: error: private"
+
+
+def test_plan_with_a_chosen_language():
+    steps = pipeline.plan(Options("URL", "speech", None, True, language="br"))
+    assert steps == [("transcribe", ["URL", "--mode", "speech", "--language", "br"])]  # no accent: not English
+    steps = pipeline.plan(Options("URL", "song", None, True, language="en"))
+    assert steps[1] == ("transcribe", ["{vocals}", "--mode", "song", "--language", "en"])
+    assert steps[2][0] == "accent"
+    assert pipeline.plan(Options("URL"))[0][1] == ["URL", "--mode", "speech"]  # automatic: no --language
+
+
+def test_run_with_a_chosen_language(fake, monkeypatch):
+    monkeypatch.setattr(pipeline, "ollama_models", lambda: None)
+    result = Runner(command=fake).run(Options("URL", "speech", "de", language="sv"))
+    assert result.language == "Swedish (sv, chosen)" and result.language_code == "sv"
+    assert result.translation.strip() == "[sv>de] hallo Welt"  # the chosen language is the source
+    assert not result.notes
+
+
+def test_run_warns_about_other_languages(fake, monkeypatch):
+    monkeypatch.setenv("FAKE_MIXED", "1")
+    result = Runner(command=fake).run(Options("URL", language="br"))
+    assert result.notes == [
+        "Other languages may be spoken: detection found English 60% at 0:10, 1:30; German 40% at 0:50 "
+        "(in 3 parts checked). Everything was transcribed as Breton; choose Automatic as the spoken "
+        "language to give each passage its own."]
+    assert "Other languages may be spoken" in pipeline.format_summary(result)
+
+
+def test_spoken_language_choices():
+    choices = pipeline.spoken_choices()
+    assert choices[0] == "Automatic" and "Breton (br)" in choices and "English (en)" in choices
+    assert len(choices) == len(pipeline.WHISPER_CODES) + 1 == 101
+    assert all(pipeline.language_name(c) != c for c in pipeline.WHISPER_CODES)  # every one has a name
+    assert choices[1:] == sorted(choices[1:], key=str.casefold)
+    assert pipeline.choice_code("Breton (br)") == "br" and pipeline.choice_code("Automatic") is None
+    assert pipeline.choice_code("Klingon (tlh)") is None
+    assert pipeline.choice_for("br") == "Breton (br)"
+    assert pipeline.choice_for(None) == pipeline.choice_for("tlh") == "Automatic"
+    assert pipeline.accent_possible(None) and pipeline.accent_possible("en")
+    assert not pipeline.accent_possible("br")
+
+
+def test_typing_a_letter_jumps_to_the_next_language():
+    choices = ["Automatic", "Basque (eu)", "Belarusian (be)", "Breton (br)", "Catalan (ca)"]
+    assert pipeline.jump_choice(choices, "Automatic", "b") == "Basque (eu)"
+    assert pipeline.jump_choice(choices, "Basque (eu)", "B") == "Belarusian (be)"
+    assert pipeline.jump_choice(choices, "Breton (br)", "b") == "Basque (eu)"  # round to the first
+    assert pipeline.jump_choice(choices, "Breton (br)", "c") == "Catalan (ca)"
+    assert pipeline.jump_choice(choices, "Breton (br)", "z") is None
+    assert pipeline.jump_choice(choices, "Breton (br)", "") is None
+
+
+def test_settings_load_and_save(tmp_path):
+    from gui import settings
+
+    file = tmp_path / "Language" / "settings.json"
+    assert settings.load(file) == {}  # none yet
+    settings.save({"spoken_language": "br"}, file)
+    settings.save({"other": 1}, file)
+    assert settings.load(file) == {"spoken_language": "br", "other": 1}
+    settings.save({"spoken_language": None}, file)
+    assert settings.load(file)["spoken_language"] is None
+    file.write_text("{broken", encoding="utf-8")
+    assert settings.load(file) == {}
+    file.write_text("[1, 2]", encoding="utf-8")
+    assert settings.load(file) == {}

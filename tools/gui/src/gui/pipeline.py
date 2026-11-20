@@ -33,16 +33,61 @@ LANGUAGES = {
 
 _LANGUAGE_LINE = re.compile(r"^Language:\s*([a-z]{2,3})\b(?:\s*\((\d+%)\))?(?:;\s*also found:\s*(.*))?",
                             re.MULTILINE)
-# Names for languages Whisper detects beyond the translation targets.
+# Names for the other languages Whisper knows (it detects and transcribes all of WHISPER_CODES).
 EXTRA_NAMES = {
-    "af": "Afrikaans", "be": "Belarusian", "bg": "Bulgarian", "bn": "Bengali", "br": "Breton",
+    "af": "Afrikaans", "am": "Amharic", "as": "Assamese", "az": "Azerbaijani", "ba": "Bashkir",
+    "be": "Belarusian", "bg": "Bulgarian", "bn": "Bengali", "bo": "Tibetan", "br": "Breton",
     "bs": "Bosnian", "ca": "Catalan", "cy": "Welsh", "et": "Estonian", "eu": "Basque", "fa": "Persian",
-    "fo": "Faroese", "ga": "Irish", "gl": "Galician", "hr": "Croatian", "hy": "Armenian", "is": "Icelandic",
-    "ka": "Georgian", "kk": "Kazakh", "la": "Latin", "lb": "Luxembourgish", "lt": "Lithuanian",
-    "lv": "Latvian", "mk": "Macedonian", "ms": "Malay", "mt": "Maltese", "oc": "Occitan", "sl": "Slovenian",
-    "sq": "Albanian", "sr": "Serbian", "sw": "Swahili", "ta": "Tamil", "th": "Thai", "tl": "Tagalog",
-    "ur": "Urdu", "yi": "Yiddish", "yo": "Yoruba", "yue": "Cantonese",
+    "fo": "Faroese", "ga": "Irish", "gl": "Galician", "gu": "Gujarati", "ha": "Hausa", "haw": "Hawaiian",
+    "hr": "Croatian", "ht": "Haitian Creole", "hy": "Armenian", "is": "Icelandic", "jw": "Javanese",
+    "ka": "Georgian", "kk": "Kazakh", "km": "Khmer", "kn": "Kannada", "la": "Latin", "lb": "Luxembourgish",
+    "ln": "Lingala", "lo": "Lao", "lt": "Lithuanian", "lv": "Latvian", "mg": "Malagasy", "mi": "Maori",
+    "mk": "Macedonian", "ml": "Malayalam", "mn": "Mongolian", "mr": "Marathi", "ms": "Malay", "mt": "Maltese",
+    "my": "Burmese", "ne": "Nepali", "nn": "Norwegian Nynorsk", "oc": "Occitan", "pa": "Punjabi",
+    "ps": "Pashto", "sa": "Sanskrit", "sd": "Sindhi", "si": "Sinhala", "sl": "Slovenian", "sn": "Shona",
+    "so": "Somali", "sq": "Albanian", "sr": "Serbian", "su": "Sundanese", "sw": "Swahili", "ta": "Tamil",
+    "te": "Telugu", "tg": "Tajik", "th": "Thai", "tk": "Turkmen", "tl": "Tagalog", "tt": "Tatar",
+    "ur": "Urdu", "uz": "Uzbek", "yi": "Yiddish", "yo": "Yoruba", "yue": "Cantonese",
 }
+# The languages transcribe can be told to use (`--language`): Whisper large-v3's.
+WHISPER_CODES = (
+    "en zh de es ru ko fr ja pt tr pl ca nl ar sv it id hi fi vi he uk el ms cs ro da hu ta no th ur hr "
+    "bg lt la mi ml cy sk te fa lv bn sr az sl kn et mk br eu is hy ne mn bs kk sq sw gl mr pa si km sn "
+    "yo so af oc ka be tg sd gu am yi lo uz fo ht ps tk nn mt sa lb my bo tl mg as tt haw ln ha ba jw su "
+    "yue"
+).split()
+AUTOMATIC = "Automatic"
+
+
+def spoken_choices() -> list[str]:
+    """The spoken-language selector's values: Automatic, then every language by name."""
+    return [AUTOMATIC] + sorted((f"{language_name(c)} ({c})" for c in WHISPER_CODES), key=str.casefold)
+
+
+def choice_code(choice: str) -> str | None:
+    """The code in a selector value ("Breton (br)" -> "br"); None for Automatic or anything else."""
+    m = re.fullmatch(r".*\(([a-z]{2,3})\)", choice.strip())
+    return m.group(1) if m and m.group(1) in WHISPER_CODES else None
+
+
+def choice_for(code: str | None) -> str:
+    return f"{language_name(code)} ({code})" if code in WHISPER_CODES else AUTOMATIC
+
+
+def jump_choice(choices: list[str], current: str, letter: str) -> str | None:
+    """Typing a letter on the selector: the next value starting with it, round to the first."""
+    if len(letter) != 1 or not letter.isalpha():
+        return None
+    matches = [c for c in choices if c.casefold().startswith(letter.casefold())]
+    if not matches:
+        return None
+    later = [c for c in matches if choices.index(c) > (choices.index(current) if current in choices else -1)]
+    return later[0] if later and current in matches else matches[0]
+
+
+def accent_possible(spoken: str | None) -> bool:
+    """Accent recognition is for English: possible with English or automatic detection."""
+    return spoken in (None, "en")
 
 
 LLM_MODEL = "gemma4:12b"  # translate's default Ollama model
@@ -84,6 +129,7 @@ class Options:
     accent: bool = False
     start: float | None = None  # None: from the beginning
     end: float | None = None  # None: to the end
+    language: str | None = None  # the spoken language, chosen; None: detect it
 
 
 @dataclass
@@ -145,6 +191,8 @@ def describe_language(line: str) -> str | None:
     if not m:
         return None
     code, share, others = m.groups()
+    if "set with --language" in line[m.start():].splitlines()[0]:
+        return f"{language_name(code)} ({code}, chosen)"
     text = f"{language_name(code)} ({code}{', ' + share if share else ''})"
     if others:
         named = []
@@ -155,6 +203,21 @@ def describe_language(line: str) -> str | None:
         if named:
             text += "; also " + ", ".join(named)
     return text
+
+
+_MIXED_LINE = re.compile(r"^Warning: other languages may be spoken \(detected (.*), in (\d+) window\(s\)\)",
+                         re.MULTILINE)
+
+
+def mixed_language_note(stderr: str, chosen: str) -> str | None:
+    """transcribe's warning that a chosen language meets a recording with several, for people."""
+    m = _MIXED_LINE.search(stderr)
+    if not m:
+        return None
+    found = re.sub(r"\b([a-z]{2,3}) (\d+%)", lambda o: f"{language_name(o.group(1))} {o.group(2)}", m.group(1))
+    return (f"Other languages may be spoken: detection found {found} (in {m.group(2)} parts checked). "
+            f"Everything was transcribed as {language_name(chosen)}; choose Automatic as the spoken "
+            "language to give each passage its own.")
 
 
 _DURATION_LINE = re.compile(r"^Duration:\s*(\d+(?::\d{2}){1,2})\s*$")  # a video's length (ingest)
@@ -210,15 +273,16 @@ def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
     Accent without a range keeps its default cap (the first 10 minutes of a video).
     """
     rng = range_args(opts.start, opts.end)
+    language = ["--language", opts.language] if opts.language else []
     steps: list[tuple[str, list[str]]] = []
     if opts.kind == "song":
         steps.append(("vocals", [opts.url, *rng, "-o", "{vocals}"]))
-        steps.append(("transcribe", ["{vocals}", "--mode", "song"]))
+        steps.append(("transcribe", ["{vocals}", "--mode", "song", *language]))
     else:
-        steps.append(("transcribe", [opts.url, *rng, "--mode", "speech"]))
+        steps.append(("transcribe", [opts.url, *rng, "--mode", "speech", *language]))
     if opts.translate_to:
         steps.append(("translate", translate_args(opts.translate_to, None, translator)))
-    if opts.accent:
+    if opts.accent and accent_possible(opts.language):
         steps.append(("accent", ["{vocals}"] if opts.kind == "song" else [opts.url, *rng]))
     return steps
 
@@ -388,6 +452,9 @@ class Runner:
                     language = detected_language(err)
                     result.language_code = language
                     result.language = describe_language(err) or ""
+                    mixed = mixed_language_note(err, opts.language) if opts.language else None
+                    if mixed:
+                        result.notes.append(mixed)
                     if not result.transcript.strip():
                         result.notes.append("No speech or singing found.")
                         break
