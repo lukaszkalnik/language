@@ -20,7 +20,7 @@ specification before it is built. Use this outline and drop sections that do not
 ```markdown
 # NNNN Short title
 
-Status: concept | specified | in progress | done | dropped
+Status: concept | specified | in progress | parked | done | dropped
 
 ## Problem
 What is missing or wrong, and for whom.
@@ -35,5 +35,5 @@ Tools, models (with sizes and licences), files touched, open questions.
 Checks that show it works (tests, a real run, docs updated).
 ```
 
-When a task is done, set its status to `done`, link the commits or release, and move its
-roadmap entry to the Done list.
+When a task's status changes, change its emoji in the roadmap too. When a task is done, set its
+status to `done` and link the commits or release.

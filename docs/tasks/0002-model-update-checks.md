@@ -1,6 +1,6 @@
 # 0002 No network checks for cached models
 
-Status: in progress
+Status: parked
 
 ## Problem
 Libraries given a Hugging Face repo ID ask the Hub for the latest revision even when the model is
