@@ -37,3 +37,13 @@ def test_short_public_video(capsys, tmp_path):
     assert len(result["top"]) == 3
     cached, _ = run_json(capsys, "--cache-dir", str(tmp_path), url)
     assert cached["source"]["from_cache"] is True
+
+
+@pytest.mark.parametrize("model", ["ecapa", "xlsr"])
+def test_cached_model_needs_no_network(tmp_path, model):
+    from ingest.testing import run_twice_second_trapped, write_noise_wav
+
+    wav = write_noise_wav(tmp_path / "noise.wav")
+    run, requests = run_twice_second_trapped("accent.cli", str(wav), "--model", model, "--no-cache", "--json")
+    assert run.returncode == 0, run.stderr
+    assert requests == []

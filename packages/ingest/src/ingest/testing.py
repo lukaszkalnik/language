@@ -76,3 +76,17 @@ def write_noise_wav(path: Path, seconds: float = 8.0, rate: int = 16000) -> Path
         wav.setframerate(rate)
         wav.writeframes(samples.astype("<i2").tobytes())
     return path
+
+
+def run_twice_second_trapped(module: str, *args: str, stdin: str | None = None, timeout: float = 1800):
+    """Run `python -m <module> args` once normally (downloading what it needs), then again with
+    every connection going to a ConnectionTrap. Returns (second run, trapped requests)."""
+    import subprocess
+    import sys
+
+    cmd = [sys.executable, "-m", module, *args]
+    first = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout)
+    assert first.returncode == 0, first.stderr
+    with ConnectionTrap() as trap:
+        second = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout, env=trap.env())
+    return second, trap.requests

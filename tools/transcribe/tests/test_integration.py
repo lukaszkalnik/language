@@ -34,3 +34,16 @@ def test_pyannote_reads_telemetry_switch():
     env = {k: v for k, v in os.environ.items() if k != "PYANNOTE_METRICS_ENABLED"}
     out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
     assert out.stdout.strip() == "False", out.stderr
+
+
+@pytest.mark.parametrize("speakers", [False, True], ids=["plain", "speakers"])
+def test_cached_models_need_no_network(speakers):
+    from huggingface_hub import hf_hub_download
+
+    from ingest.testing import run_twice_second_trapped
+
+    speech = hf_hub_download("Jzuluaga/accent-id-commonaccent_ecapa", "data/england_1.wav")
+    args = [speech, "--mode", "speech", "--model", "turbo", "--json", "--no-cache"]
+    run, requests = run_twice_second_trapped("transcribe.cli", *args, *(["--speakers"] if speakers else []))
+    assert run.returncode == 0, run.stderr
+    assert requests == []
