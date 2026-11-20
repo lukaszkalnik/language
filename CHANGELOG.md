@@ -5,6 +5,14 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
+- **Much better Swedish.** Swedish songs and speech are now transcribed with KB-Whisper, a
+  Whisper the National Library of Sweden trained on 50,000 hours of Swedish. In our test songs
+  most misheard words are now right, and a chorus that used to go missing is back. The
+  first Swedish run downloads 3.2 GB once. On a Mac it takes about twice as long as before and
+  needs about 6 GB of memory. To use the old model, pass `--model large-v3`.
+- Mac: fixed a fault in timing that could put a stray "!" into a line and switch off the checks
+  for made-up text and the retries on uncertain passages.
+- A short line that starts a new sung line is no longer glued to the end of the line before it.
 - Mac: fixed a fault in timing that could put a stray "!" into a line and switch off the checks
   for made-up text and the retries on uncertain passages.
 - A short line that starts a new sung line is no longer glued to the end of the line before it.

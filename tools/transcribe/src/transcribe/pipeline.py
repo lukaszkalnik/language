@@ -35,7 +35,7 @@ class Options:
     end: float | None = None
     mode: str = "auto"
     language: str | None = None
-    model: str = "large-v3"
+    model: str = "auto"
     speakers: bool = False
     num_speakers: int | None = None
     names: list[str] = field(default_factory=list)
@@ -143,7 +143,8 @@ def _restrict(probs: dict[str, float], allowed: list[str]) -> str:
     return max(allowed, key=lambda c: probs.get(c, 0.0))
 
 
-def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bool, fixed_language: str | None):
+def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bool, fixed_language: str | None,
+                      suffix: str = ""):
     def cut_at(lo: float, hi: float) -> float:
         return vad.quietest_point(reader.read(lo, hi), lo)
 
@@ -164,7 +165,7 @@ def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bo
     segments: list[Segment] = []
     resumed = 0
     for i, batch in enumerate(batches):
-        path = workdir / f"speech_{i:04d}_{batch[0][0]:.2f}_{batch[-1][1]:.2f}.json"
+        path = workdir / f"speech{suffix}_{i:04d}_{batch[0][0]:.2f}_{batch[-1][1]:.2f}.json"
         if use_cache and path.exists():
             resumed += 1
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -207,8 +208,9 @@ def song_clips(voice: list[tuple[float, float]], duration: float) -> list[tuple[
     return [(max(0.0, a - SONG_PAD), min(duration, b + SONG_PAD)) for a, b in merged]
 
 
-def transcribe_song(model, reader, voice, language: str, separated: bool, workdir: Path, use_cache: bool):
-    path = workdir / "song-clips.json"  # not song.json: earlier results came from the whole audio
+def transcribe_song(model, reader, voice, language: str, separated: bool, workdir: Path, use_cache: bool,
+                    suffix: str = ""):
+    path = workdir / f"song-clips{suffix}.json"  # not song.json: earlier results came from the whole audio
 
     def compute():
         audio = reader.read()
@@ -227,7 +229,10 @@ def run(opts: Options) -> Result:
     tags = read_wav_tags(src.path)
     separated = _is_separated(tags)
     wav = src.cached_wav(SR, 1, use_cache=opts.use_cache)
-    workdir = cache_dir("derived", "transcribe", src.key(opts.model))
+    # The general model detects the language (and keys the cache); a language's own model, if
+    # one is used, only transcribes, and its results are cached under its name.
+    detector = "large-v3" if opts.model in ("auto", "kb-whisper") else opts.model
+    workdir = cache_dir("derived", "transcribe", src.key(detector))
 
     with WavReader(wav) as reader:
         if reader.duration < 0.5:
@@ -260,29 +265,39 @@ def run(opts: Options) -> Result:
         if chosen == "speech" and opts.speakers is False and opts.num_speakers:
             opts.speakers = True
 
-        model = whisper.load(opts.model, opts.device)
-        backend = f"{model.name}:{opts.model}"
+        model = None
         if opts.language:
             report = langdetect.LanguageReport(opts.language, [{"code": opts.language, "share": 1.0, "windows": 0}])
             status(f"Language: {opts.language} (set with --language)")
         else:
+            model = whisper.load(detector, opts.device)
             # Songs on a full mix: VAD misses much of the singing, so detection windows use the whole range.
             det_voice = voice if (chosen == "speech" or separated) else [(0.0, reader.duration)]
             report = detect_language(model, reader, det_voice, workdir / "languages.json", opts.use_cache)
             others = ", ".join(f"{lang['code']} ({lang['share']:.0%})" for lang in report.languages[1:])
             status(f"Language: {report.main} ({report.languages[0]['share']:.0%})" + (f"; also found: {others}" if others else ""))
 
+        per_passage = chosen == "speech" and opts.language is None and report.multilingual
+        name = whisper.model_for(opts.model, report.main, per_passage)
+        if model is None or name != detector:
+            if opts.model == "auto" and name != "large-v3":
+                status(f"Transcribing with {whisper.DESCRIPTIONS[name]} (--model large-v3 to use the general model)")
+            model = None  # one large model in memory at a time
+            model = whisper.load(name, opts.device)
+        backend = f"{model.name}:{name}"
+        suffix = "" if name == detector else f"-{name}"
+
         if chosen == "song" and separated:
             voice = vad.energy_regions(reader)  # Silero misses sung notes; the vocal stem's level does not
         if chosen == "song":
-            raw = transcribe_song(model, reader, voice, report.main, separated, workdir, opts.use_cache)
+            raw = transcribe_song(model, reader, voice, report.main, separated, workdir, opts.use_cache, suffix)
             kept, dropped = hallucination.filter_segments(raw, voice if separated else None)
             segments = lines.split_lines(kept)
             for line in segments:  # confidence per sung line, not per Whisper segment
                 hallucination.score(line)
             segments = hallucination.collapse_line_loops(segments)
         else:
-            raw = transcribe_speech(model, reader, voice, report, workdir, opts.use_cache, opts.language)
+            raw = transcribe_speech(model, reader, voice, report, workdir, opts.use_cache, opts.language, suffix)
             segments, dropped = hallucination.filter_segments(raw, voice)
 
         names: list[str] = []

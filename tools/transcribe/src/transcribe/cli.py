@@ -17,15 +17,17 @@ FORMATS = ("text", "lrc", "srt", "vtt", "json", "md")
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="transcribe",
-        description="Detect the language and transcribe speech or singing with Whisper large-v3. "
+        description="Detect the language and transcribe speech or singing with Whisper large-v3 "
+        "(KB-Whisper for Swedish). "
         "Transcript on stdout; progress and notes on stderr.",
     )
     add_input_args(parser)
     parser.add_argument("--mode", choices=["auto", "song", "speech"], default="auto",
                         help="song: one sung line per line; speech: sentences in paragraphs; auto (default): guess")
     parser.add_argument("--language", metavar="XX", help="skip detection, e.g. en, de, pl, fr")
-    parser.add_argument("--model", choices=["large-v3", "turbo"], default="large-v3",
-                        help="Whisper large-v3 (default, best) or large-v3-turbo (faster)")
+    parser.add_argument("--model", choices=["auto", "large-v3", "turbo", "kb-whisper"], default="auto",
+                        help="auto (default): KB-Whisper for Swedish, Whisper large-v3 for everything else; "
+                        "large-v3; turbo (large-v3-turbo, faster); kb-whisper (KB-Whisper, Swedish)")
     out = parser.add_mutually_exclusive_group()
     out.add_argument("--lrc", dest="format", action="store_const", const="lrc", help="LRC lyrics with timestamps (song mode)")
     out.add_argument("--srt", dest="format", action="store_const", const="srt", help="SRT subtitles")

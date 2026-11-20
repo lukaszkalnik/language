@@ -1,6 +1,7 @@
 # transcribe
 
-Detects the language and transcribes speech or singing with Whisper large-v3, locally.
+Detects the language and transcribes speech or singing with Whisper large-v3, locally
+(Swedish with KB-Whisper, a Whisper trained on Swedish).
 Works on separated vocals from `vocals`, on full songs, and on podcasts, interviews and lectures.
 
 ```bash
@@ -25,7 +26,9 @@ The transcript goes to stdout; mode, languages, progress and warnings go to stde
    stderr and `--json`. `--language xx` skips this. In speech mode a file that switches language
    is transcribed passage by passage with each passage's own language.
 4. **Transcription** with Whisper: MLX (`mlx-whisper`) on Apple Silicon, `faster-whisper`
-   elsewhere. `--model large-v3` (default) or `turbo`.
+   elsewhere. `--model auto` (default) picks the language's own model if there is one
+   (Swedish: KB-Whisper) and large-v3 otherwise; `--model large-v3`, `turbo` or `kb-whisper`
+   choose one. A file transcribed passage by passage in several languages keeps large-v3.
 5. **Hallucination control**: VAD, `condition_on_previous_text=False`, temperature fallback,
    segments without voice / known filler phrases ("Thanks for watching", subtitle credits) /
    music-only text dropped, repetition loops collapsed, and low-confidence lines marked `[?]`
@@ -65,7 +68,9 @@ Speakers are named "Speaker 1", "Speaker 2"... or by `--names "Anna,Ben"`, in or
 | --- | --- | --- |
 | `mlx-community/whisper-large-v3-mlx` | 3.1 GB | default on Apple Silicon |
 | `mlx-community/whisper-large-v3-turbo` | 1.6 GB | `--model turbo` |
+| [`KBLab/kb-whisper-large`](https://huggingface.co/KBLab/kb-whisper-large) (Apache-2.0) | 3.2 GB download, 3.1 GB kept | Swedish; on Apple Silicon converted to MLX on first use (runs in float32: about 6 GB of memory, ~2× slower than large-v3) |
 | `Systran/faster-whisper-large-v3` | 3.1 GB | default elsewhere |
+| `KBLab/kb-whisper-large` (CTranslate2 copy) | 3.1 GB | Swedish elsewhere |
 | Silero VAD | 2 MB | bundled with the `silero-vad` package |
 | `pyannote/speaker-diarization-community-1` | 34 MB | `--speakers` with a token |
 | `speechbrain/spkrec-ecapa-voxceleb` | 83 MB | `--speakers` fallback |
