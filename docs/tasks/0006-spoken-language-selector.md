@@ -1,6 +1,6 @@
 # 0006 Spoken language in the window
 
-Status: concept
+Status: done (2026-11-20, on main; not released yet)
 
 ## Problem
 transcribe detects the language with Whisper large-v3 on up to 8 windows across the file. For
@@ -72,3 +72,17 @@ passages in it come out as nonsense in the chosen language (or Whisper translate
   the warning on stderr and in the window; a single-language one does not.
 - Unit tests: step plans with and without a chosen language, settings load/save (missing and
   broken file), the warning rule; READMEs (gui, transcribe) and CHANGELOG under Unreleased.
+
+## Outcome
+- transcribe: with `--language`, detection still runs as a check (large-v3 loads only when the
+  windows' result is not cached); when its windows disagree, one `Warning: other languages may
+  be spoken (detected en 60% at 1:00, 3:00; de 40% at 2:00, in 3 window(s)) …` line, times in
+  the original recording. `--json` adds `detected_languages`.
+- Window: "Spoken language" combobox (Automatic + Whisper's 100 languages, letter jumps),
+  saved in `settings.json` (`gui/settings.py`); "Accent (English only)" greyed out for other
+  choices; the found panel says "Breton (br, chosen)"; the warning becomes a note in the result.
+  Run and Stop are packed first so they stay visible; minimum width 760 px.
+- Checked: unit tests (plans, warning rule and note, settings, letter jumps, lazy detection);
+  the window under Xvfb at default and minimum size, the choice surviving a restart.
+- Not checked with real models in this container: the cost of the extra detection on a long
+  file, and false alarms on real Breton clips (task 0001's measurements).
