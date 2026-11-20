@@ -13,7 +13,7 @@ from ingest import audio
 from ingest.cache import cache_dir
 from ingest.cli import report_progress
 from ingest.errors import ModelError
-from ingest.models import announce_hf_download, pick_device, quiet_libraries
+from ingest.models import announce_hf_download, load_cached_first, pick_device, quiet_libraries
 from ingest.source import Source
 
 
@@ -37,6 +37,29 @@ MODELS = {
 DEFAULT_MODEL = "htdemucs_ft"
 # Derived stems: everything except the vocals.
 DERIVED = {"instrumental": "no_vocals", "no_vocals": "no_vocals", "accompaniment": "no_vocals"}
+
+
+def demucs_cached(spec: ModelSpec, cache_dir: str | None = None) -> bool:
+    """True if the bag's yaml and every weights file it lists are in the Hugging Face cache.
+
+    Only then is the model loaded without asking the Hub: Demucs falls back to Meta's legacy
+    download server when the Hub cannot give it a file.
+    """
+    import yaml
+    from huggingface_hub import try_to_load_from_cache
+
+    def cached(filename: str) -> str | None:
+        path = try_to_load_from_cache(spec.hf_repo, filename, cache_dir=cache_dir)
+        return path if isinstance(path, str) else None
+
+    if not (bag_file := cached(f"{spec.name}.yaml")):
+        return False
+    try:
+        with open(bag_file, encoding="utf-8") as fh:
+            sigs = yaml.safe_load(fh)["models"]
+    except Exception:
+        return False
+    return all(cached(f"{sig}.safetensors") for sig in sigs)
 
 
 def stem_choices(model: str) -> list[str]:
@@ -115,9 +138,12 @@ def separate(src: Source, model: str, device: str = "auto", use_cache: bool = Tr
     channels = min(info.channels, 2)
 
     dev = pick_device(device)
-    announce_hf_download(spec.hf_repo, "README.md", what=f"Demucs {model} model")
+    cached = demucs_cached(spec)
+    if not cached:
+        announce_hf_download(spec.hf_repo, f"{model}.yaml", what=f"Demucs {model} model")
     try:
-        separator = Separator(model=model, device=dev, shifts=shifts, progress=False, callback=Progress())
+        separator = load_cached_first(
+            lambda: Separator(model=model, device=dev, shifts=shifts, progress=False, callback=Progress()), cached)
     except Exception as exc:
         raise ModelError(f"could not load Demucs model {model} ({exc.__class__.__name__}: {exc})") from None
 
