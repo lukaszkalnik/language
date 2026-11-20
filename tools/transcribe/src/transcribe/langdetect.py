@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ingest.timeparse import format_seconds
+
 WINDOW = 30.0  # Whisper's context
 MIN_VOICE = 4.0  # a window needs this much voice to be useful
 OTHER_SHARE = 0.12  # a language with at least this share of the evidence is reported
@@ -82,3 +84,23 @@ def aggregate(results: list[dict[str, float]], weights: list[float] | None = Non
         if share >= OTHER_SHARE or (wins.get(code, 0) >= 2 and share >= 0.05):
             langs.append({"code": code, "share": round(share, 3), "windows": wins.get(code, 0)})
     return LanguageReport(main, langs)
+
+
+def mixed_warning(chosen: str, report: LanguageReport, windows: list[tuple[float, float]],
+                  results: list[dict[str, float]], offset: float = 0.0) -> str | None:
+    """A warning when a chosen language meets a recording whose windows disagree on the language.
+
+    One detected language that differs from the chosen one is the expected case (a rare
+    language taken for a common one) and gives no warning; several suggest a mixed recording,
+    whose other passages would come out as nonsense in the chosen language.
+    """
+    if not report.multilingual:
+        return None
+    tops = [max(p, key=p.get) for p in results]
+    parts = []
+    for lang in report.languages:
+        times = [format_seconds(a + offset) for (a, _), top in zip(windows, tops, strict=True) if top == lang["code"]]
+        parts.append(f"{lang['code']} {lang['share']:.0%}" + (f" at {', '.join(times)}" if times else ""))
+    return (f"Warning: other languages may be spoken (detected {'; '.join(parts)}, in {len(windows)} "
+            f"window(s)): everything is transcribed as {chosen}; without --language each passage "
+            "gets its own language")

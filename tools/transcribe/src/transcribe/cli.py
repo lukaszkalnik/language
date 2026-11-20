@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_input_args(parser)
     parser.add_argument("--mode", choices=["auto", "song", "speech"], default="auto",
                         help="song: one sung line per line; speech: sentences in paragraphs; auto (default): guess")
-    parser.add_argument("--language", metavar="XX", help="skip detection, e.g. en, de, pl, fr")
+    parser.add_argument("--language", metavar="XX", help="transcribe in this language, e.g. en, de, pl, fr; warns if others seem to be spoken")
     parser.add_argument("--model", choices=["auto", "large-v3", "turbo", "kb-whisper"], default="auto",
                         help="auto (default): KB-Whisper for Swedish, Whisper large-v3 for everything else; "
                         "large-v3; turbo (large-v3-turbo, faster); kb-whisper (KB-Whisper, Swedish)")

@@ -57,6 +57,7 @@ class Result:
     duration: float
     backend: str
     title: str | None = None
+    detected: langdetect.LanguageReport | None = None  # what detection found when --language set it
 
     def meta(self) -> dict:
         src = self.source.describe()
@@ -70,6 +71,7 @@ class Result:
             "separated_vocals": self.separated,
             "language": self.language.main,
             "languages": self.language.languages,
+            **({"detected_languages": self.detected.languages} if self.detected else {}),
             "speakers": self.speaker_names,
             "model": self.backend,
             "dropped_segments": self.dropped,
@@ -128,15 +130,25 @@ def detect_mode(reader: WavReader, separated: bool) -> mode.ModeDecision:
     return mode.decide(avg, separated)
 
 
-def detect_language(model, reader: WavReader, voice, cache_path: Path, use_cache: bool) -> langdetect.LanguageReport:
+@dataclass
+class Detection:
+    report: langdetect.LanguageReport
+    windows: list[tuple[float, float]]
+    probs: list[dict[str, float]]
+
+
+def detect_language(load_model, reader: WavReader, voice, cache_path: Path, use_cache: bool,
+                    message: str = "Detecting language") -> Detection:
+    """Language probabilities on windows across the file; the model is loaded only if not cached."""
     windows = langdetect.pick_windows(reader.duration, voice)
 
     def compute():
+        model = load_model()
         return [model.detect(reader.read(a, b)) for a, b in windows]
 
-    status(f"Detecting language on {len(windows)} segment(s) across the file...")
+    status(f"{message} on {len(windows)} segment(s) across the file...")
     probs = _json_cache(cache_path, compute, use_cache)
-    return langdetect.aggregate(probs)
+    return Detection(langdetect.aggregate(probs), windows, probs)
 
 
 def _restrict(probs: dict[str, float], allowed: list[str]) -> str:
@@ -327,14 +339,29 @@ def run(opts: Options) -> Result:
             opts.speakers = True
 
         model = None
+
+        def detector_model():
+            nonlocal model
+            if model is None:
+                model = whisper.load(detector, opts.device)
+            return model
+
+        # Songs on a full mix: VAD misses much of the singing, so detection windows use the whole range.
+        # With --language the detection still runs, only as a check for other languages.
+        det_voice = voice if (chosen == "speech" or separated) else [(0.0, reader.duration)]
+        found = detect_language(detector_model, reader, det_voice, workdir / "languages.json", opts.use_cache,
+                                "Checking for other languages" if opts.language else "Detecting language")
+        detected = None
         if opts.language:
+            detected = found.report
             report = langdetect.LanguageReport(opts.language, [{"code": opts.language, "share": 1.0, "windows": 0}])
             status(f"Language: {opts.language} (set with --language)")
+            warning = langdetect.mixed_warning(opts.language, found.report, found.windows, found.probs,
+                                               src.timeline_start)
+            if warning:
+                status(warning)
         else:
-            model = whisper.load(detector, opts.device)
-            # Songs on a full mix: VAD misses much of the singing, so detection windows use the whole range.
-            det_voice = voice if (chosen == "speech" or separated) else [(0.0, reader.duration)]
-            report = detect_language(model, reader, det_voice, workdir / "languages.json", opts.use_cache)
+            report = found.report
             others = ", ".join(f"{lang['code']} ({lang['share']:.0%})" for lang in report.languages[1:])
             status(f"Language: {report.main} ({report.languages[0]['share']:.0%})" + (f"; also found: {others}" if others else ""))
 
@@ -402,4 +429,4 @@ def run(opts: Options) -> Result:
     if low:
         status(f"{low} line(s) marked [?] as low confidence.")
     return Result(src, chosen, reason, separated, report, segments, len(dropped), names, duration, backend,
-                  title=tags.get("INAM") or None)
+                  title=tags.get("INAM") or None, detected=detected)

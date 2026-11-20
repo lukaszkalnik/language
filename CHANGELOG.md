@@ -5,6 +5,9 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
+- **A warning for mixed languages.** When you tell `transcribe` the language with
+  `--language`, it now still checks the recording and warns if other languages seem to be
+  spoken too, with where they were found, since everything is transcribed in the chosen one.
 - **Much better Swedish.** Swedish songs and speech are now transcribed with KB-Whisper, a
   Whisper the National Library of Sweden trained on 50,000 hours of Swedish. In our test songs
   most misheard words are now right, and a chorus that used to go missing is back. The

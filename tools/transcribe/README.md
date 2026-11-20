@@ -23,8 +23,12 @@ The transcript goes to stdout; mode, languages, progress and warnings go to stde
    mode on a full, unseparated mix prints a hint to run `vocals` first.
 3. **Language** on up to 8 voiced 30 s windows spread across the whole file (song intros are
    often instrumental, podcasts start with jingles). The main language and any others found go to
-   stderr and `--json`. `--language xx` skips this. In speech mode a file that switches language
-   is transcribed passage by passage with each passage's own language.
+   stderr and `--json`. In speech mode a file that switches language is transcribed passage by
+   passage with each passage's own language. `--language xx` transcribes everything in that
+   language; detection still runs, only as a check: when its windows disagree on the language, a
+   warning on stderr names the languages found and where (`--json`: `detected_languages`). One
+   detected language other than the chosen one gives no warning (a rare language is often
+   taken for a common one, e.g. Breton for French).
 4. **Transcription** with Whisper: MLX (`mlx-whisper`) on Apple Silicon, `faster-whisper`
    elsewhere. `--model auto` (default) picks the language's own model if there is one
    (Swedish: KB-Whisper) and large-v3 otherwise; `--model large-v3`, `turbo` or `kb-whisper`

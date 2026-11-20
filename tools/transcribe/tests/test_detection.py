@@ -3,7 +3,7 @@ import pytest
 
 from transcribe import mode
 from transcribe.diarize import cluster, embedding_windows, windows_to_turns
-from transcribe.langdetect import aggregate, pick_windows
+from transcribe.langdetect import aggregate, mixed_warning, pick_windows
 from transcribe.vad import merge_regions, plan_pieces
 
 SR = 16_000
@@ -186,3 +186,36 @@ def test_cached_pyannote_pipeline_loads_with_the_hub_offline_first(monkeypatch, 
     assert diarize.pyannote_turns("x.wav", None, "cpu") is None
     assert offline == [True, False]  # offline from the cache, then online for the missing file
     assert "using the built-in method" in capsys.readouterr().err
+
+
+def test_chosen_language_warns_only_when_windows_disagree():
+    windows = [(0.0, 30.0), (60.0, 90.0), (120.0, 150.0)]
+    mixed = [{"en": 0.9, "de": 0.1}, {"de": 0.8, "en": 0.2}, {"en": 0.7, "de": 0.3}]
+    w = mixed_warning("en", aggregate(mixed), windows, mixed, offset=60.0)
+    assert w.startswith("Warning: other languages may be spoken")
+    assert "en 60% at 1:00, 3:00" in w and "de 40% at 2:00" in w  # times in the original recording
+    assert "transcribed as en" in w
+    # Breton taken for French everywhere: the expected case, no warning.
+    french = [{"fr": 0.8, "br": 0.1}] * 3
+    assert mixed_warning("br", aggregate(french), windows, french) is None
+
+
+def test_detection_loads_the_model_only_without_a_cache(tmp_path):
+    from transcribe.pipeline import detect_language
+
+    class Reader:
+        duration = 20.0
+
+        def read(self, a, b):
+            return np.zeros(int((b - a) * SR), dtype=np.float32)
+
+    class Model:
+        def detect(self, audio):
+            return {"de": 0.9, "en": 0.1}
+
+    loads = []
+    cache = tmp_path / "languages.json"
+    found = detect_language(lambda: loads.append(1) or Model(), Reader(), [(0.0, 20.0)], cache, True)
+    assert found.report.main == "de" and found.windows == [(0.0, 20.0)] and loads == [1]
+    again = detect_language(lambda: loads.append(1) or Model(), Reader(), [(0.0, 20.0)], cache, True)
+    assert again.report.main == "de" and loads == [1]
