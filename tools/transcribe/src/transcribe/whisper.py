@@ -22,6 +22,7 @@ MLX_MODELS = {
 }
 FASTER_MODELS = {"large-v3": "large-v3", "turbo": "large-v3-turbo"}
 FASTER_REPOS = {"large-v3": "Systran/faster-whisper-large-v3", "turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo"}
+SEED = 0  # temperature fallback samples at random; a fixed seed makes runs repeatable (MLX)
 
 # Decoding settings shared by both backends. condition_on_previous_text=False stops a
 # hallucination in one window from being copied into the next.
@@ -59,6 +60,10 @@ class MLXWhisper:
         import mlx.core as mx
         from mlx_whisper.transcribe import ModelHolder
 
+        from . import mlx_fixes
+
+        mlx_fixes.apply()
+
         try:
             self.path = hf_local_path(self.repo)  # transcribe() must pass the same key to reuse it
             self.model = ModelHolder.get_model(self.path, mx.float16)
@@ -78,8 +83,10 @@ class MLXWhisper:
     def transcribe(self, audio: np.ndarray, language: str | None, offset: float = 0.0,
                    clips: list[tuple[float, float]] | None = None, prompt: str | None = None,
                    show_progress: bool = False) -> tuple[list[Segment], str | None]:
+        import mlx.core as mx
         import mlx_whisper
 
+        mx.random.seed(SEED)
         clip = "0" if not clips else [t for pair in clips for t in pair]
         result = mlx_whisper.transcribe(
             audio.astype(np.float32), path_or_hf_repo=self.path, language=language,

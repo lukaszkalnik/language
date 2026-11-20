@@ -5,6 +5,9 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
+- Mac: fixed a fault in timing that could put a stray "!" into a line and switch off the checks
+  for made-up text and the retries on uncertain passages.
+- A short line that starts a new sung line is no longer glued to the end of the line before it.
 - A short line that starts a new sung line is no longer glued to the end of the line before it.
 - **Songs no longer lose their first lines.** On a song with an instrumental intro, the
   transcription could start with a made-up subtitle credit (e.g. "Svensktextning.nu") and skip
