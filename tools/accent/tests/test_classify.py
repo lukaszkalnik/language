@@ -46,3 +46,60 @@ def test_render_text_and_note():
     assert "1. Irish" in text and "60.0%" in text
     assert "(silent, skipped)" in text
     assert "statistical guess" in NOTE and "misclassified" in NOTE
+
+
+@pytest.fixture
+def cache_root(tmp_path):
+    from ingest import cache
+
+    cache.set_cache_root(tmp_path)
+    yield tmp_path
+    cache.set_cache_root(None)
+
+
+def _fake_base_model(cache_root):
+    commit = "0123456789abcdef0123456789abcdef01234567"
+    repo = cache_root / "models" / "accent" / "wav2vec2_checkpoints" / "models--facebook--wav2vec2-large-xlsr-53"
+    (repo / "refs").mkdir(parents=True)
+    (repo / "refs" / "main").write_text(commit)
+    (repo / "snapshots" / commit).mkdir(parents=True)
+    (repo / "snapshots" / commit / "config.json").write_text("{}")
+
+
+def test_is_cached_needs_every_file_the_model_loads(cache_root):
+    from accent.classify import AccentClassifier
+
+    for name in ("ecapa", "xlsr"):
+        savedir = cache_root / "models" / "accent" / name
+        savedir.mkdir(parents=True)
+        assert not AccentClassifier(name, device="cpu").is_cached(savedir)
+        (savedir / "hyperparams.yaml").write_text("")
+    ecapa_dir, xlsr_dir = (cache_root / "models" / "accent" / n for n in ("ecapa", "xlsr"))
+    assert AccentClassifier("ecapa", device="cpu").is_cached(ecapa_dir)
+    assert not AccentClassifier("xlsr", device="cpu").is_cached(xlsr_dir)  # its base model is missing
+    _fake_base_model(cache_root)
+    assert AccentClassifier("xlsr", device="cpu").is_cached(xlsr_dir)
+
+
+def test_cached_model_loads_with_the_hub_offline(cache_root, monkeypatch):
+    from types import SimpleNamespace
+
+    from huggingface_hub import constants
+
+    from accent.classify import AccentClassifier
+
+    savedir = cache_root / "models" / "accent" / "ecapa"
+    savedir.mkdir(parents=True)
+    (savedir / "hyperparams.yaml").write_text("")
+    offline = []
+    model = SimpleNamespace(hparams=SimpleNamespace(label_encoder=SimpleNamespace(ind2lab={0: "us", 1: "wales"})))
+
+    def build(self, _savedir):
+        offline.append(constants.HF_HUB_OFFLINE)
+        return model
+
+    monkeypatch.setattr(AccentClassifier, "_build", build)
+    clf = AccentClassifier("ecapa", device="cpu")
+    clf.load()
+    assert offline == [True]
+    assert clf.labels == ["us", "wales"]

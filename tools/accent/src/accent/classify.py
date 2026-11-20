@@ -9,7 +9,14 @@ import numpy as np
 
 from ingest.cache import cache_dir
 from ingest.errors import ModelError
-from ingest.models import hf_repo_size, human_size, pick_device, quiet_libraries
+from ingest.models import (
+    hf_is_cached,
+    hf_repo_size,
+    human_size,
+    load_cached_first,
+    pick_device,
+    quiet_libraries,
+)
 
 # As published on the Hugging Face Hub (model cards checked 2026-11-18).
 ECAPA_SOURCE = "Jzuluaga/accent-id-commonaccent_ecapa"
@@ -82,41 +89,57 @@ class AccentClassifier:
         self._model = None
         self.labels: list[str] = []
 
+    def _base_dir(self):
+        """Where the XLSR model's yaml keeps its transformers base model (a HF cache layout)."""
+        return cache_dir("models", "accent", "wav2vec2_checkpoints")
+
+    def is_cached(self, savedir) -> bool:
+        """True if every file the model loads is on disk, so loading needs no network."""
+        if not (savedir / "hyperparams.yaml").exists():
+            return False
+        return self.spec.name != "xlsr" or hf_is_cached(XLSR_BASE, "config.json", cache_dir=str(self._base_dir()))
+
     def _announce_download(self, savedir) -> None:
-        if (savedir / "hyperparams.yaml").exists():
-            return
-        size = hf_repo_size(self.spec.source, ["*.ckpt", "*.yaml", "*.txt", "*.py"]) or 0
-        if self.spec.name == "xlsr" and not any((cache_dir("models", "accent", "wav2vec2_checkpoints")).iterdir()):
+        size = 0
+        if not (savedir / "hyperparams.yaml").exists():
+            size += hf_repo_size(self.spec.source, ["*.ckpt", "*.yaml", "*.txt", "*.py"]) or 0
+        if self.spec.name == "xlsr" and not hf_is_cached(XLSR_BASE, "config.json", cache_dir=str(self._base_dir())):
             size += hf_repo_size(XLSR_BASE, ["*.bin", "*.json"]) or 0
         print(f"Downloading {self.spec.name} model ({human_size(size) if size else 'size unknown'}), first run only...",
               file=sys.stderr, flush=True)
 
+    def _build(self, savedir):
+        run_opts = {"device": self.device}
+        if self.spec.name == "ecapa":
+            from speechbrain.inference.classifiers import EncoderClassifier
+
+            return EncoderClassifier.from_hparams(
+                source=self.spec.source, savedir=str(savedir), run_opts=run_opts,
+                local_strategy=_local_strategy(),
+            )
+        from speechbrain.inference.interfaces import foreign_class
+
+        return foreign_class(
+            source=self.spec.source,
+            pymodule_file="custom_interface.py",
+            classname="CustomEncoderWav2vec2Classifier",
+            savedir=str(savedir),
+            run_opts=run_opts,
+            local_strategy=_local_strategy(),
+            # The yaml would otherwise create ./wav2vec2_checkpoints in the current directory.
+            overrides={"wav2vec2": {"save_path": str(self._base_dir())}},
+        )
+
     def load(self) -> None:
         quiet_libraries()
         savedir = cache_dir("models", "accent", self.spec.name)
-        self._announce_download(savedir)
-        run_opts = {"device": self.device}
+        cached = self.is_cached(savedir)
+        if not cached:
+            self._announce_download(savedir)
         try:
-            if self.spec.name == "ecapa":
-                from speechbrain.inference.classifiers import EncoderClassifier
-
-                self._model = EncoderClassifier.from_hparams(
-                    source=self.spec.source, savedir=str(savedir), run_opts=run_opts,
-                    local_strategy=_local_strategy(),
-                )
-            else:
-                from speechbrain.inference.interfaces import foreign_class
-
-                self._model = foreign_class(
-                    source=self.spec.source,
-                    pymodule_file="custom_interface.py",
-                    classname="CustomEncoderWav2vec2Classifier",
-                    savedir=str(savedir),
-                    run_opts=run_opts,
-                    local_strategy=_local_strategy(),
-                    # The yaml would otherwise create ./wav2vec2_checkpoints in the current directory.
-                    overrides={"wav2vec2": {"save_path": str(cache_dir("models", "accent", "wav2vec2_checkpoints"))}},
-                )
+            # Files in savedir never go to the Hub, but the XLSR base model is loaded by
+            # transformers, which asks the Hub for the latest revision unless it is offline.
+            self._model = load_cached_first(lambda: self._build(savedir), cached)
         except OSError as exc:
             raise ModelError(
                 f"could not download or load the {self.spec.name} model ({exc.__class__.__name__}: {exc}). "
