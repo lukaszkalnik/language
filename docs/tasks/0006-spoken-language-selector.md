@@ -58,10 +58,9 @@ passages in it come out as nonsense in the chosen language (or Whisper translate
 - Song mode: the check runs on the separated vocals, as detection does now.
 - False alarms are likely for rare languages (Breton taken for French in some windows and Welsh
   in others); the wording says "may" for that reason. Measure on the Breton clips of task 0001.
-- **Open**: instead of only warning, offer "chosen language as the main one, others labelled
-  per passage" (the chosen code replaces the detected main language, other detected languages
-  keep their own). Useful for mixed interviews; risky where detection confuses languages. Decide
-  after the measurements.
+- Only a warning: a chosen language is always used for the whole recording. No mode that keeps
+  the chosen language as the main one and labels other passages separately; for mixed
+  recordings, Automatic does that.
 
 ## Done when
 - Choosing a language transcribes in it (speech and song), with its own model where there is
