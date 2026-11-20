@@ -5,6 +5,7 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
+- A short line that starts a new sung line is no longer glued to the end of the line before it.
 - **Songs no longer lose their first lines.** On a song with an instrumental intro, the
   transcription could start with a made-up subtitle credit (e.g. "Svensktextning.nu") and skip
   the first sung lines. It now starts listening where the singing starts.

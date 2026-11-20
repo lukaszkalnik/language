@@ -22,19 +22,32 @@ ORPHAN_WORDS = 2  # a line this short is joined to its neighbour (a held last wo
 ORPHAN_GAP = 1.5
 
 
+ENGLISH_I = ("I", "I'm", "I'll", "I've", "I'd")
+
+
+def _starts_line(line: Segment) -> bool:
+    """A capitalised first word starts a new sung line (Whisper capitalises line starts)."""
+    first = line.words[0].text.strip() if line.words else line.text.strip()
+    return first[:1].isupper() and first not in ENGLISH_I
+
+
 def _joinable(left: Segment, right: Segment) -> bool:
     return right.start - left.end <= ORPHAN_GAP and not left.text.rstrip().endswith((".", "!", "?")) \
         and len(left.words) + len(right.words) <= MAX_LINE_WORDS + ORPHAN_WORDS
 
 
 def merge_orphans(lines: list[Segment]) -> list[Segment]:
-    """Join one- or two-word lines to the previous line (or else the next one)."""
+    """Join one- or two-word lines to the previous line (or else the next one).
+
+    A short line that starts with a capital begins a line, so it joins the next one instead.
+    """
     out: list[Segment] = []
     for line in lines:
-        if out and line.words and len(line.words) <= ORPHAN_WORDS and _joinable(out[-1], line):
+        if out and line.words and len(line.words) <= ORPHAN_WORDS and _joinable(out[-1], line) \
+                and not _starts_line(line):
             out[-1] = _new_line(out[-1].words + line.words, out[-1])
         elif out and out[-1].words and len(out[-1].words) <= ORPHAN_WORDS and line.words and _joinable(out[-1], line) \
-                and (len(out) < 2 or not _joinable(out[-2], out[-1])):
+                and (len(out) < 2 or not _joinable(out[-2], out[-1]) or _starts_line(out[-1])):
             out[-1] = _new_line(out[-1].words + line.words, line)
         else:
             out.append(line)
@@ -59,7 +72,7 @@ def _split(segments: list[Segment]) -> list[Segment]:
                 stripped = word.text.strip()
                 prev = current[-1].text.strip()
                 ends_sentence = prev.endswith((".", "!", "?", "…"))
-                capital_restart = stripped[:1].isupper() and stripped not in ("I", "I'm", "I'll", "I've", "I'd") \
+                capital_restart = stripped[:1].isupper() and stripped not in ENGLISH_I \
                     and (len(current) >= 4 or gap > 0.15) and len(current) >= 2
                 too_long = len(current) >= MAX_LINE_WORDS or word.end - current[0].start > MAX_LINE_SECONDS
                 if gap > LINE_PAUSE or ends_sentence or capital_restart or too_long:

@@ -23,6 +23,12 @@ def test_orphan_word_joins_previous_line():
     assert texts == ["We were born and raised in a summer haze"]
 
 
+def test_short_capitalised_line_joins_the_next_line_not_the_previous():
+    w = words("Jag är nästan där Jag kommer, jag kommer,", gaps={4: 0.6, 6: 0.5})
+    texts = [ln.text for ln in split_lines([seg("", words=w)])]
+    assert texts == ["Jag är nästan där", "Jag kommer, jag kommer,"]
+
+
 def test_long_line_is_capped():
     w = words(" ".join(f"w{i}" for i in range(30)))
     lines = split_lines([seg("", words=w)])
