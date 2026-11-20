@@ -41,6 +41,15 @@ Approach:
   tests per tool: a second run with `HTTPS_PROXY`/`HTTP_PROXY` pointing at a local listener
   that counts connections; it must see none.
 
+## Progress
+- Built: `hub_offline`/`load_cached_first` (8ea7a93), vocals (bcde1c9), accent XLSR (bd6f481),
+  pyannote telemetry off (426d1e1), pyannote offline (c851c8c), integration tests (663732e).
+- A unit test runs Demucs' real loader on a tiny model in a fake cache behind the connection
+  trap. On its own Demucs asked huggingface.co and then tried to download the model again from
+  dl.fbaipublicfiles.com. Through `load_cached_first` it makes no connection.
+- Left: run the integration tests (`-m integration`) with real models on a machine with
+  network, then set the status to done.
+
 ## Done when
 With models cached and every connection refused (the integration tests above), every tool runs
 without delay: accent (ecapa, xlsr), vocals, transcribe (with and without speaker labels),

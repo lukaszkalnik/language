@@ -10,6 +10,11 @@ important changes first. The section for a release opens its GitHub release note
   most misheard words are now right, and a chorus that used to go missing is back. The
   first Swedish run downloads 3.2 GB once. On a Mac it takes about twice as long as before and
   needs about 6 GB of memory. To use the old model, pass `--model large-v3`.
+- **No more stalls on a bad network.** Song vocals, accent recognition and speaker labels no
+  longer check online for model updates once the model is downloaded, so a flaky connection
+  can no longer hold them up for minutes, and they work with no connection at all.
+  Transcription and translation already did. Song vocals also no longer download the whole
+  model again when the check fails.
 - **Fewer gaps in songs.** Singing that the first pass skipped is now transcribed again on its own.
 - Mac: fixed a fault in timing that could put a stray "!" into a line and switch off the checks
   for made-up text and the retries on uncertain passages.
