@@ -29,6 +29,8 @@ The transcript goes to stdout; mode, languages, progress and warnings go to stde
    elsewhere. `--model auto` (default) picks the language's own model if there is one
    (Swedish: KB-Whisper) and large-v3 otherwise; `--model large-v3`, `turbo` or `kb-whisper`
    choose one. A file transcribed passage by passage in several languages keeps large-v3.
+   KB-Whisper gets many more Swedish words right, but leaves out some spoken fillers
+   ("ju", "så"); on a Mac it runs at about half the speed of large-v3.
    On separated vocals, sung stretches that no line covers are transcribed again one by one
    (Whisper sometimes skips a passage inside a whole song).
 5. **Hallucination control**: VAD, `condition_on_previous_text=False`, temperature fallback,

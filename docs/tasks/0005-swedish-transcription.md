@@ -1,6 +1,6 @@
 # 0005 Better Swedish transcription
 
-Status: in progress
+Status: done (2026-11-20, commits from 140b9c4 on main; not released yet)
 
 ## Problem
 Whisper large-v3 transcribes Swedish songs with many mishearings and sometimes loses whole
@@ -47,40 +47,47 @@ lines before. Turning off Whisper's no-speech skip and shorter clips (one per ph
 - Spoken Swedish no worse than with large-v3.
 - READMEs and CHANGELOG updated; the model's size and licence in the transcribe README.
 
-## Progress (2026-11-20)
+## Result (2026-11-20)
 
 Built: `--model auto` (default) uses KB-Whisper large for Swedish (`KBLab/kb-whisper-large` at
 commit `d5d5984`, the "standard" style; Apache-2.0). On MLX it is converted from KBLab's
 transformers weights on first use (`transcribe/convert.py`). faster-whisper uses the CTranslate2
-copy in the same repo. Second pass over lost singing in song mode on separated vocals.
+copy in the same repo. The second pass over lost singing runs in song mode on separated vocals and
+keeps only lines with confidence ≥ 0.3.
 
 Findings:
 - mlx-whisper 0.4.3's timestamp rules have bugs (`transcribe/mlx_fixes.py`). KB-Whisper hit them
   in almost every window: a stray "!" (token 0), NaN log-probs, collapsed timestamps.
 - KB-Whisper overflows in float16 on MLX (word timings all 0), so it runs in float32, about 2×
   slower than large-v3 (a 2-minute song: ~75–130 s against ~35 s).
-- The weights correlate 0.76–0.99 with large-v3's, so the conversion is right. The decoder
-  changed most.
-- Its timestamps are whole seconds. Word timings use the default alignment heads, like large-v3 on MLX.
+- The weights correlate 0.76–0.99 with large-v3's, so the conversion is right. Its timestamps are
+  whole seconds. Word timings use the default alignment heads, like large-v3 on MLX.
+- Repeatable: with `mx.random.seed(0)`, two runs from scratch give identical JSON (Håkan, with
+  both models). The 36–52% spread of large-v3 on Håkan came from the random fallback.
+- "strict" revision (more verbatim), on the same songs: coverage 85/63/93%; a few words better
+  ("betsel"), a few worse ("vill" for "väl"). On a conversation it keeps more fillers ("alltså",
+  "så"). Not better overall, and it has no CTranslate2 copy: we stay with standard.
+- faster-whisper path checked on CPU on this Mac (Ekot 0:00–1:00 with `--device cpu`): downloads
+  the pinned CTranslate2 copy (3.1 GB) and transcribes like the MLX path.
 
-Measured on the first two minutes, separated vocals, song mode (MLX). Coverage = share of the
-vocal stem's sung time under a line:
+Songs, first two minutes, separated vocals, song mode (MLX). Coverage = share of the vocal
+stem's sung time under a line:
 
 | Song | large-v3 | KB-Whisper + second pass |
 | --- | --- | --- |
 | Maggio, *Jag kommer* (youtu.be/VjZwz3yxS9I, 0:00–2:00) | 84% | 85%; "Lucy in the sky", "Natten är ung", "jag är kär", "taxitrappen" now right |
-| Håkan, *Känn ingen sorg…* (youtu.be/-fusSPk4j0k, 0:00–2:00) | 36–52% | 61%; chorus 1:39–1:55 present, "Göteborg" right |
+| Håkan, *Känn ingen sorg…* (youtu.be/-fusSPk4j0k, 0:00–2:00) | 36–52% | 59%; chorus 1:39–1:55 present, "Göteborg" right |
 | Garmarna, *Herr Mannelig* (youtu.be/X_BpmQqErks, 0:00–1:56) | 94% | 92%; "upprann", "Bergatrollet", "Heder vill jag giva", "uti munnen" right; "Fagerungers vän" still wrong |
 
-Speech, first two minutes: SVT (youtu.be/7vw4ucXPW9U) about the same as large-v3. Ekot
-(youtu.be/J4AWnq4MfNE) had better words, but 1:25–1:53 was lost. That run was before the mlx
-fix, and the passage alone now comes out right. Re-run it.
+Speech (speech mode; words in the transcript, then the differences):
 
-Left to do:
-- Re-measure speech (Ekot, SVT, a podcast) after the mlx fix, so spoken Swedish is no worse.
-- Håkan's intro chant (0:00–0:13) stays missing: alone, KB-Whisper writes a low-confidence
-  fragment ([?]) and large-v3 a subtitle credit. Probably unclear on the stem; accept it?
-- Check that `mx.random.seed` makes runs repeatable (not checked yet).
-- Try the "strict" (verbatim) revision on songs. Its CTranslate2 copy is missing, so faster-whisper
-  would need a conversion.
-- Run on faster-whisper (Linux/Windows) once.
+| Clip | large-v3 | KB-Whisper |
+| --- | --- | --- |
+| Ekot, *Kvinnoregistret* (youtu.be/J4AWnq4MfNE, 0:00–2:00) | 164 | 165; "dömd" (not "drömd"); one likely mistake ("Henning Holm" for "henne") |
+| SVT, *Fyra scenarion* (youtu.be/7vw4ucXPW9U, 0:00–2:00) | 256 | 262; "Tidöpartierna", "Ulf Kristersson"; spoken words large-v3 left out |
+| Enkelt Svenska Podcast (youtu.be/uPh-bkVxbWE, 1:00–4:00) | 321 | large-v3 skipped a passage of six sentences that KB-Whisper has |
+| Framgångspodden (youtu.be/qmenxr1hOXs, 10:00–13:00) | – | same content; leaves out fillers ("ju", "så", "uppenbarligen"), the "standard" style condenses |
+
+Not solved: Håkan's intro chant (0:00–0:13). On its own, KB-Whisper writes a guess with
+confidence 0.06 ("Michael Jackson"), now dropped, and large-v3 writes a subtitle credit. It is
+probably too unclear on the separated stem.
