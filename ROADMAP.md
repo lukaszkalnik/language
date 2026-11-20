@@ -5,9 +5,13 @@ Planned work in order; each item links its concept or specification in
 
 ## Next
 
-1. [0002 No network checks for cached models](docs/tasks/0002-model-update-checks.md)
-2. [0001 Breton support](docs/tasks/0001-breton-support.md)
-3. [0003 Signed and notarized app](docs/tasks/0003-signed-app.md)
+1. [0001 Breton support](docs/tasks/0001-breton-support.md)
+2. [0003 Signed and notarized app](docs/tasks/0003-signed-app.md)
+
+## Parked
+
+- [0002 No network checks for cached models](docs/tasks/0002-model-update-checks.md): built;
+  waits for the integration tests with real models on the user's machine.
 
 ## Done
 

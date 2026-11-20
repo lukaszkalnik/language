@@ -48,7 +48,7 @@ Approach:
   trap. On its own Demucs asked huggingface.co and then tried to download the model again from
   dl.fbaipublicfiles.com. Through `load_cached_first` it makes no connection.
 - Left: run the integration tests (`-m integration`) with real models on a machine with
-  network, then set the status to done.
+  network, then set the status to done. Parked until that run on the user's machine.
 
 ## Done when
 With models cached and every connection refused (the integration tests above), every tool runs
