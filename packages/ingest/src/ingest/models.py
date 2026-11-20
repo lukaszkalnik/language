@@ -6,6 +6,9 @@ import fnmatch
 import logging
 import os
 import warnings
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from typing import TypeVar
 
 from .errors import ModelError
 
@@ -24,17 +27,55 @@ def _status(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
-def hf_is_cached(repo_id: str, filename: str | None = None, revision: str | None = None) -> bool:
+def hf_is_cached(repo_id: str, filename: str | None = None, revision: str | None = None,
+                 cache_dir: str | None = None) -> bool:
     """True if `filename` (or, without one, any snapshot of the repo) is in the local HF cache."""
     from huggingface_hub import snapshot_download, try_to_load_from_cache
 
-    if filename and isinstance(try_to_load_from_cache(repo_id, filename, revision=revision), str):
+    if filename and isinstance(try_to_load_from_cache(repo_id, filename, revision=revision, cache_dir=cache_dir), str):
         return True
     try:
-        snapshot_download(repo_id, revision=revision, local_files_only=True)
+        snapshot_download(repo_id, revision=revision, cache_dir=cache_dir, local_files_only=True)
         return True
     except Exception:
         return False
+
+
+@contextmanager
+def hub_offline() -> Iterator[None]:
+    """Hugging Face Hub calls in this block use the local cache only and open no connection.
+
+    Sets huggingface_hub's offline flag (transformers reads it too) for the duration, then
+    restores it.
+    """
+    from huggingface_hub import constants
+
+    before = constants.HF_HUB_OFFLINE
+    constants.HF_HUB_OFFLINE = True
+    try:
+        yield
+    finally:
+        constants.HF_HUB_OFFLINE = before
+
+
+T = TypeVar("T")
+
+
+def load_cached_first(load: Callable[[], T], cached: bool) -> T:
+    """`load()` without asking the Hub when the model is `cached`.
+
+    If that fails (a file missing after an interrupted download), or the model is not cached,
+    load normally, which may download.
+    """
+    if cached:
+        try:
+            with hub_offline():
+                result = load()
+            if result is not None:
+                return result
+        except Exception:
+            pass
+    return load()
 
 
 def hf_local_path(repo_id: str, revision: str | None = None) -> str:
