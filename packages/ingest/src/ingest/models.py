@@ -24,20 +24,20 @@ def _status(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
-def hf_is_cached(repo_id: str, filename: str | None = None) -> bool:
+def hf_is_cached(repo_id: str, filename: str | None = None, revision: str | None = None) -> bool:
     """True if `filename` (or, without one, any snapshot of the repo) is in the local HF cache."""
     from huggingface_hub import snapshot_download, try_to_load_from_cache
 
-    if filename and isinstance(try_to_load_from_cache(repo_id, filename), str):
+    if filename and isinstance(try_to_load_from_cache(repo_id, filename, revision=revision), str):
         return True
     try:
-        snapshot_download(repo_id, local_files_only=True)
+        snapshot_download(repo_id, revision=revision, local_files_only=True)
         return True
     except Exception:
         return False
 
 
-def hf_local_path(repo_id: str) -> str:
+def hf_local_path(repo_id: str, revision: str | None = None) -> str:
     """The local snapshot folder of a cached repo, else the repo ID.
 
     Libraries given a repo ID ask the Hub for its latest revision even when the files are
@@ -46,17 +46,17 @@ def hf_local_path(repo_id: str) -> str:
     from huggingface_hub import snapshot_download
 
     try:
-        return snapshot_download(repo_id, local_files_only=True)
+        return snapshot_download(repo_id, revision=revision, local_files_only=True)
     except Exception:
         return repo_id
 
 
-def hf_repo_size(repo_id: str, patterns: list[str] | None = None) -> int | None:
+def hf_repo_size(repo_id: str, patterns: list[str] | None = None, revision: str | None = None) -> int | None:
     """Total size of the files a download will fetch (None if offline or unknown)."""
     try:
         from huggingface_hub import HfApi
 
-        info = HfApi().model_info(repo_id, files_metadata=True)
+        info = HfApi().model_info(repo_id, revision=revision, files_metadata=True)
     except Exception:
         return None
     total = 0
@@ -67,22 +67,26 @@ def hf_repo_size(repo_id: str, patterns: list[str] | None = None) -> int | None:
     return total
 
 
-def announce_hf_download(repo_id: str, probe_file: str, patterns: list[str] | None = None, what: str | None = None) -> None:
+def announce_hf_download(repo_id: str, probe_file: str, patterns: list[str] | None = None, what: str | None = None,
+                         revision: str | None = None) -> None:
     """Print the download size if `repo_id` is not in the local Hugging Face cache yet."""
-    if hf_is_cached(repo_id, probe_file):
+    if hf_is_cached(repo_id, probe_file, revision):
         return
-    size = hf_repo_size(repo_id, patterns)
+    size = hf_repo_size(repo_id, patterns, revision)
     label = what or repo_id
     _status(f"Downloading {label} ({human_size(size) if size else 'size unknown'}), first run only...")
 
 
-def hf_snapshot(repo_id: str, patterns: list[str] | None = None, probe_file: str = "config.json", what: str | None = None) -> str:
+def hf_snapshot(repo_id: str, patterns: list[str] | None = None, probe_file: str = "config.json", what: str | None = None,
+                revision: str | None = None) -> str:
     """Download (or reuse) a Hugging Face repo snapshot, printing the size on first fetch."""
     from huggingface_hub import snapshot_download
 
-    announce_hf_download(repo_id, probe_file, patterns, what)
+    announce_hf_download(repo_id, probe_file, patterns, what, revision)
+    if revision is not None and (local := hf_local_path(repo_id, revision)) != repo_id:
+        return local  # a pinned revision never changes: no need to ask the Hub
     try:
-        return snapshot_download(repo_id, allow_patterns=patterns)
+        return snapshot_download(repo_id, revision=revision, allow_patterns=patterns)
     except Exception as exc:
         raise ModelError(f"could not download {repo_id} ({exc.__class__.__name__}: {exc}). Check your network connection.") from None
 
