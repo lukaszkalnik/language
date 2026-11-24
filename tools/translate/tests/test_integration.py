@@ -21,7 +21,13 @@ def test_nllb_french_to_german():
 
 
 def test_ollama_line_alignment():
-    from translate.llm import OllamaTranslator
+    from ingest.errors import ModelError
+    from translate.llm import DEFAULT_MODEL, OllamaTranslator, check
+
+    try:
+        check(DEFAULT_MODEL)
+    except ModelError as exc:
+        pytest.skip(str(exc))  # Ollama is a separate app: not running or model not pulled
 
     doc = parse("Alors on danse\nQui dit étude dit travail\nQui dit taf te dit les thunes")
     translate_document(doc, OllamaTranslator(), "de", source="fr", progress=False)
