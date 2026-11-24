@@ -1,6 +1,6 @@
 # 0002 No network checks for cached models
 
-Status: parked
+Status: done
 
 ## Problem
 Libraries given a Hugging Face repo ID ask the Hub for the latest revision even when the model is
@@ -47,8 +47,10 @@ Approach:
 - A unit test runs Demucs' real loader on a tiny model in a fake cache behind the connection
   trap. On its own Demucs asked huggingface.co and then tried to download the model again from
   dl.fbaipublicfiles.com. Through `load_cached_first` it makes no connection.
-- Left: run the integration tests (`-m integration`) with real models on a machine with
-  network, then set the status to done. Parked until that run on the user's machine.
+- Integration tests run on the user's Mac (Apple Silicon), 2026-11-24, with real models: all
+  pass. The second, trapped run of each tool opened no connection: accent (ecapa, xlsr), vocals,
+  transcribe (plain and with speaker labels), translate (NLLB). The Ollama test passes with
+  Ollama running and now skips with the setup hint when it is not.
 
 ## Done when
 With models cached and every connection refused (the integration tests above), every tool runs
