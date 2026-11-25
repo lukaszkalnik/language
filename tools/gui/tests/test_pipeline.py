@@ -83,7 +83,8 @@ def test_plan_with_a_range():
 def test_translate_args_pass_only_known_source_languages():
     assert pipeline.translate_args("de", "pl", "nllb") == [
         "-", "--to", "de", "--from", "pl", "--only-translation", "--translator", "nllb"]
-    assert "--from" not in pipeline.translate_args("de", "br")  # Breton: translate detects it
+    assert pipeline.translate_args("de", "br")[3:5] == ["--from", "br"]  # through French
+    assert "--from" not in pipeline.translate_args("de", "haw")  # translate detects the rest
     assert "--from" not in pipeline.translate_args("de", None)
 
 
@@ -249,6 +250,8 @@ def test_plan_with_a_chosen_language():
     assert steps[1] == ("transcribe", ["{vocals}", "--mode", "song", "--language", "en"])
     assert steps[2][0] == "accent"
     assert pipeline.plan(Options("URL"))[0][1] == ["URL", "--mode", "speech"]  # automatic: no --language
+    steps = pipeline.plan(Options("URL", "speech", "en", language="br"))
+    assert steps[1] == ("translate", ["-", "--to", "en", "--from", "br", "--only-translation", "--translator", "llm"])
 
 
 def test_run_with_a_chosen_language(fake, monkeypatch):

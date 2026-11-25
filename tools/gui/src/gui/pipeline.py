@@ -257,10 +257,14 @@ def last_error(stderr: str) -> str:
     return lines[-1] if lines else "failed without a message"
 
 
+# Source languages translate knows besides the targets above (Breton: through French).
+EXTRA_SOURCES = {"br"}
+
+
 def translate_args(to: str, source: str | None = None, translator: str = "llm") -> list[str]:
     """translate on the transcript (stdin); `--from` only for a language translate knows."""
     args = ["-", "--to", to]
-    if source and source in LANGUAGES:
+    if source and (source in LANGUAGES or source in EXTRA_SOURCES):
         args += ["--from", source]
     return args + ["--only-translation", "--translator", translator]
 
@@ -281,7 +285,7 @@ def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
     else:
         steps.append(("transcribe", [opts.url, *rng, "--mode", "speech", *language]))
     if opts.translate_to:
-        steps.append(("translate", translate_args(opts.translate_to, None, translator)))
+        steps.append(("translate", translate_args(opts.translate_to, opts.language, translator)))
     if opts.accent and accent_possible(opts.language):
         steps.append(("accent", ["{vocals}"] if opts.kind == "song" else [opts.url, *rng]))
     return steps
