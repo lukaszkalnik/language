@@ -11,7 +11,10 @@ dependencies = []
 [dependency-groups]
 # Unit tests import the sources directly (see pythonpath below) and need no models,
 # so the root environment stays small: no torch, no model libraries.
-dev = ["pytest==9.2.0", "ruff==0.17.5", "numpy==2.4.6", "scipy==1.17.1", "py3langid==0.4.0"]
+dev = [
+    "pytest==9.2.0", "ruff==0.17.5", "basedpyright==1.40.2",
+    "numpy==2.4.6", "scipy==1.17.1", "py3langid==0.4.0",
+]
 
 [tool.uv]
 package = false
@@ -40,6 +43,28 @@ pythonpath = [
     "tools/gui/src",
 ]
 addopts = "-m 'not integration' --import-mode=importlib"
+
+# Type checking (pyright's checker, as basedpyright: it brings its own Node, no download at run time).
+# tests/test_types.py runs it with the model libraries stubbed as Any, so the result is the same
+# with or without them installed. Errors from before the check are in .basedpyright/baseline.json
+# (basedpyright's own baseline: fixed errors drop out with --writebaseline, new ones fail).
+[tool.basedpyright]
+include = ["packages", "tools", "tests", "conftest.py"]
+exclude = ["**/.venv", "**/build", "**/dist", "build", "dist"]
+extraPaths = [
+    "packages/ingest/src",
+    "tools/accent/src",
+    "tools/vocals/src",
+    "tools/transcribe/src",
+    "tools/translate/src",
+    "tools/gui/src",
+]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+reportMissingImports = "none"
+reportMissingModuleSource = "none"
+# tests/test_types.py writes the Any stubs for model libraries here before each check.
+stubPath = "build/type-stubs"
 
 [tool.ruff]
 line-length = 110
