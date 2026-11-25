@@ -21,6 +21,11 @@
 - Task concepts and specifications live in `docs/tasks/NNNN-short-title.md` (four-digit number,
   never reused); their order is in `ROADMAP.md`. See `docs/tasks/README.md`.
 - `ROADMAP.md` is one numbered list without sections, ordered by implementation time (done
-  tasks in the order they were built, then the current one, then the planned ones). Each entry
+  tasks in the order they were built, then the planned ones). A new task goes at the end, even
+  when work on it starts at once, unless it fits better next to related tasks. Each entry
   starts with its status emoji (💡 concept, 📝 specified, 🚧 in progress, ⏸️ parked, ✅ done,
   ❌ dropped), kept in step with the task file's `Status:` line.
+- When working through the roadmap, skip parked (⏸️) and dropped (❌) tasks.
+- Architecture and code-quality rules: [docs/architecture.md](docs/architecture.md). When one of
+  them contradicts sound domain modeling, do not bend the model to fit the rule: ask the user,
+  and propose how to adapt the rule instead.
