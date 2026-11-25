@@ -1,11 +1,17 @@
-# Every test on every push to main: lint and unit tests in the root environment (as the release
-# build has it), the unit tests again with every tool's libraries (the ones that need torch or
-# Demucs), and each tool's integration tests (network, real models; models cached between runs).
+# Every test on every push to main that changes more than Markdown files and docs/: lint and
+# unit tests in the root environment (as the release build has it), the unit tests again with
+# every tool's libraries (the ones that need torch or Demucs), and each tool's integration tests
+# (network, real models; models cached between runs).
 name: tests
 
 on:
   push:
     branches: [main]
+    # Skipped when a push changes only these (a push that also touches code runs everything).
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".gitignore"
   workflow_dispatch:
 
 concurrency:

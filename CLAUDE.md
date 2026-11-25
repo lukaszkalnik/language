@@ -10,7 +10,8 @@
   Integration tests: `uv run --package <tool> pytest -m integration tools/<tool>`.
 - `uv run ruff check .` before committing.
 - After every push, watch the CI run it started (`gh run list --branch main --limit 3`,
-  `gh run watch <id> --exit-status`) to the end: the `tests` workflow runs every test (unit
+  `gh run watch <id> --exit-status`) to the end (a push changing only Markdown files, `docs/` or `.gitignore` starts none): the
+  `tests` workflow runs every test (unit
   tests with and without the tools' libraries, all integration tests). If it fails, fix the
   cause and push again; tell the user about failures you cannot fix (e.g. YouTube blocking CI).
 - The baselines (`tests/code_size_baseline.json`, `.basedpyright/baseline.json`) only shrink:

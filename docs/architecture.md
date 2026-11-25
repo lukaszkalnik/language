@@ -148,10 +148,19 @@ a function; split a module along the feature's parts.
 - **(checked)** Unit tests run with the root environment only. The root `conftest.py` blocks
   every installed library outside it, because the shared `.venv` gathers every tool's libraries
   while CI's root environment does not have them. A test that needs one skips itself with
-  `pytest.importorskip("torch")`. `LANGUAGE_TEST_MODEL_LIBS=1 uv run pytest` lifts the block to
-  run those tests where the libraries are installed.
+  `pytest.importorskip("torch")`, and the run ends by saying how many skipped and how to run
+  them: `uv sync --all-packages --inexact && LANGUAGE_TEST_MODEL_LIBS=1 uv run pytest`.
+  Keep such tests rare: a small library a test needs (like `huggingface_hub` or PyYAML) goes
+  into the root's `model-tests` group, and code that only sometimes needs a model library
+  imports it only on that path (`pick_device("cpu")` needs no torch).
 - Tests that need the network or a model are marked `@pytest.mark.integration` and run per tool:
   `uv run --package <tool> pytest -m integration tools/<tool>` (one model-heavy run at a time).
+- **(checked)** CI (`.github/workflows/tests.yml`) runs every test on every push to `main` that
+  changes more than Markdown files, `docs/` or `.gitignore`: lint and unit tests in the root
+  environment on macOS and Windows, the unit tests again with every tool's libraries, and each
+  tool's integration tests (models cached between runs). YouTube refuses most downloads from CI
+  machines, so a YouTube test calls `ingest.testing.skip_if_youtube_refuses_ci`, which skips it
+  on that refusal there and only there. Watch the run after pushing and fix what fails.
 - A test checks behaviour through the public function, with small inputs built in the test
   (`ingest.testing` has helpers for WAV files and for catching network connections).
 - A fixed bug gets a test that fails without the fix.
@@ -159,6 +168,7 @@ a function; split a module along the feature's parts.
 ## Lint
 
 **(checked)** `uv run ruff check .` with the rule sets `E`, `F`, `W`, `I`, `B`, `UP`, `C4`, `SIM`,
-`PIE`, `PERF`, `ISC`, `N`, `TID`, `ICN`, `RUF`, line length 110 (see `pyproject.toml` for the few
-ignored rules and why). Not adopted, as they would change much of the existing code: `PTH`,
-`BLE`, `T20`, `PL`, `TRY`, `EM`, `FBT`, `S`.
+`PIE`, `PERF`, `ISC`, `N`, `TID`, `ICN`, `RUF` and `PLW1514` (every `open()` and `read_text()`
+names its encoding: Windows would read cp1252 instead of UTF-8), line length 110 (see
+`pyproject.toml` for the few ignored rules and why). Not adopted, as they would change much of
+the existing code: `PTH`, `BLE`, `T20`, `PL` (apart from `PLW1514`), `TRY`, `EM`, `FBT`, `S`.
