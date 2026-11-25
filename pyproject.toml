@@ -27,7 +27,7 @@ environments = [
 members = ["packages/ingest", "tools/accent", "tools/vocals", "tools/transcribe", "tools/translate", "tools/gui"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages", "tools"]
+testpaths = ["tests", "packages", "tools"]
 markers = [
     "integration: needs network and/or downloads a model (run with: uv run pytest -m integration)",
 ]

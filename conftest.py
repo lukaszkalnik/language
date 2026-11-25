@@ -49,10 +49,13 @@ def root_environment() -> set[str]:
 def blocked_modules() -> set[str]:
     """Top-level modules of installed distributions that the root environment does not have."""
     allowed = root_environment()
+    ours = {path.stem for path in ROOT.iterdir()}  # e.g. `tests`, which some libraries ship too
     return {
         module
         for module, dists in metadata.packages_distributions().items()
-        if not module.startswith("_") and not any(canonicalize_name(d) in allowed for d in dists)
+        if not module.startswith("_")
+        and module not in ours
+        and not any(canonicalize_name(d) in allowed for d in dists)
     }
 
 
