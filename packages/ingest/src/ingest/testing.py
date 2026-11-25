@@ -90,3 +90,16 @@ def run_twice_second_trapped(module: str, *args: str, stdin: str | None = None, 
     with ConnectionTrap() as trap:
         second = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout, env=trap.env())
     return second, trap.requests
+
+
+def skip_if_youtube_refuses_ci(stderr: str) -> None:
+    """Skip a YouTube test when YouTube's bot check refused the download on a CI machine.
+
+    YouTube refuses most downloads from data-centre addresses (GitHub's runners); there it says
+    nothing about our code. On a person's machine the same refusal fails the test, since it may
+    mean yt-dlp needs an upgrade.
+    """
+    if os.environ.get("CI") and "confirm this is not a bot" in stderr:
+        import pytest
+
+        pytest.skip("YouTube refused the download from this CI machine (bot check)")

@@ -8,6 +8,7 @@ import json
 import pytest
 
 from accent import cli
+from ingest.testing import skip_if_youtube_refuses_ci
 
 pytestmark = pytest.mark.integration
 
@@ -15,6 +16,7 @@ pytestmark = pytest.mark.integration
 def run_json(capsys, *args):
     code = cli.main(["--json", *args])
     out = capsys.readouterr()
+    skip_if_youtube_refuses_ci(out.err)
     assert code == 0, out.err
     return json.loads(out.out), out.err
 

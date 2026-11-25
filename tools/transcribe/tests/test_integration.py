@@ -9,6 +9,8 @@ import sys
 
 import pytest
 
+from ingest.testing import skip_if_youtube_refuses_ci
+
 pytestmark = pytest.mark.integration
 
 
@@ -16,6 +18,7 @@ def test_short_video_speech_json(tmp_path):
     cmd = [sys.executable, "-m", "transcribe.cli", "https://www.youtube.com/watch?v=jNQXAC9IVRw",
            "--model", "turbo", "--json", "--cache-dir", str(tmp_path)]
     proc = subprocess.run(cmd, capture_output=True, text=True)
+    skip_if_youtube_refuses_ci(proc.stderr)
     assert proc.returncode == 0, proc.stderr
     data = json.loads(proc.stdout)
     assert data["language"] == "en" and data["mode"] == "speech"
@@ -29,6 +32,7 @@ def test_breton_uses_the_breton_whisper():
     cmd = [sys.executable, "-m", "transcribe.cli", "https://youtu.be/IyBNVrLQ2-A", "--end", "0:30",
            "--language", "br", "--json", "--no-cache"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
+    skip_if_youtube_refuses_ci(proc.stderr)
     assert proc.returncode == 0, proc.stderr
     data = json.loads(proc.stdout)
     assert data["language"] == "br" and data["model"].endswith(":whisper-br")
