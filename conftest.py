@@ -81,3 +81,18 @@ def pytest_configure(config):
         return
     blocked = blocked_modules() - set(sys.modules)
     sys.meta_path.insert(0, ModelLibraryBlocker(blocked))
+
+
+def pytest_terminal_summary(terminalreporter):
+    """Say how many tests skipped for want of the tools' libraries, and how to run them."""
+    reasons = [
+        str(report.longrepr[2]) if isinstance(report.longrepr, tuple) else str(report.longrepr)
+        for report in terminalreporter.stats.get("skipped", [])
+    ]
+    count = sum("not in the root environment" in r or "is not installed" in r for r in reasons)
+    if count:
+        terminalreporter.write_line(
+            f"{count} test(s) skipped: they need the tools' libraries (torch, Demucs, ...). CI runs them; "
+            "here: uv sync --all-packages --inexact && LANGUAGE_TEST_MODEL_LIBS=1 uv run pytest",
+            yellow=True,
+        )
