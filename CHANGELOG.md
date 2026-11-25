@@ -3,6 +3,16 @@
 What changed for people using Language, newest release first. Each release lists the most
 important changes first. The section for a release opens its GitHub release notes.
 
+## Unreleased
+
+- **Ollama is started for you.** If Ollama is installed but not running (installed with
+  Homebrew, or the Ollama app not opened since a restart), the window now starts it when it
+  translates and stops it again when you close the window, so you get Ollama's better
+  translations instead of a message telling you to install it. If the window still has to
+  translate offline, the tip says what is missing (Ollama itself, its model, or that it did not
+  start), and it appears above the transcript instead of inside the translation, so "Copy all"
+  no longer mixes it into the translated text.
+
 ## 0.4.1
 
 (0.4.0 was tagged but never published: its build stopped at a failing test.)
