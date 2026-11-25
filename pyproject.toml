@@ -15,9 +15,14 @@ dev = [
     "pytest==9.2.0", "ruff==0.17.5", "basedpyright==1.40.2",
     "numpy==2.4.6", "scipy==1.17.1", "py3langid==0.4.0",
 ]
+# Small libraries some unit tests need: the model-cache checks (huggingface_hub, as ingest
+# pins it; PyYAML for Demucs' bag files). Installed by default with dev, but unlike dev's
+# libraries sources may import them only inside functions (tests/test_architecture.py).
+model-tests = ["huggingface-hub==2.4.0", "pyyaml==6.0.3"]
 
 [tool.uv]
 package = false
+default-groups = ["dev", "model-tests"]
 # Apple Silicon first; Linux and Windows kept portable. Intel Macs are left out: current
 # PyTorch no longer ships wheels for them (and Demucs pins numpy<2 there).
 environments = [

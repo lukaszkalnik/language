@@ -1725,6 +1725,7 @@ wheels = [
 name = "language-workspace"
 version = "0.1.0"
 source = { virtual = "." }
+default-groups = ["dev", "model-tests"]
 
 [package.dev-dependencies]
 dev = [
@@ -1734,6 +1735,10 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "scipy" },
+]
+model-tests = [
+    { name = "huggingface-hub" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -1746,6 +1751,10 @@ dev = [
     { name = "pytest", specifier = "==9.2.0" },
     { name = "ruff", specifier = "==0.17.5" },
     { name = "scipy", specifier = "==1.17.1" },
+]
+model-tests = [
+    { name = "huggingface-hub", specifier = "==2.4.0" },
+    { name = "pyyaml", specifier = "==6.0.3" },
 ]
 
 [[package]]
