@@ -5,6 +5,11 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
+- **Read while it works.** The transcript now appears piece by piece while Whisper is still
+  listening (about every half minute of speech), and the translation chunk by chunk, instead of
+  all at once at the end. When a step finishes its text is replaced by the tidied-up final
+  version (paragraphs, speakers, passages Whisper made up removed). Songs still appear at the
+  end of transcribing on a Mac. If you press Stop, what was done so far stays readable.
 - **Ollama is started for you.** If Ollama is installed but not running (installed with
   Homebrew, or the Ollama app not opened since a restart), the window now starts it when it
   translates and stops it again when you close the window, so you get Ollama's better

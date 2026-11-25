@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
-from . import ollama, settings, setup
+from . import livetext, ollama, settings, setup
 from .pipeline import (
     LANGUAGES,
     Cancelled,
@@ -489,23 +489,22 @@ class App:
         self.root.after(1000, self._tick)
 
     def _poll(self) -> None:
+        during = {  # events while a job goes on
+            "status": self._on_status,
+            "step": lambda value: self._on_step(*value),
+            "language": lambda value: self.found_language.set(f"Language: {value}"),
+            "progress": lambda value: self._on_progress(*value),
+            "info": lambda value: self._on_info(*value),
+            # text so far: the transcript grows piece by piece, then the translation chunk by chunk
+            "partial": lambda value: livetext.append(self.output if value[0] == "transcribe" else self.translation,
+                                                     value[1]),
+            "transcribed": lambda value: self._fill(self.output, format_transcript(Result(transcript=value))),
+        }
         try:
             while True:
                 kind, value = self.events.get_nowait()
-                if kind == "status":
-                    self._on_status(value)
-                    continue
-                if kind == "step":
-                    self._on_step(*value)
-                    continue
-                if kind == "language":
-                    self.found_language.set(f"Language: {value}")
-                    continue
-                if kind == "progress":
-                    self._on_progress(*value)
-                    continue
-                if kind == "info":
-                    self._on_info(*value)
+                if kind in during:
+                    during[kind](value)
                     continue
                 if kind == "duration":
                     # --info gave no length: the run did, so the next run can use a range

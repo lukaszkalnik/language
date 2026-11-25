@@ -32,11 +32,14 @@ FAKE = textwrap.dedent("""
         else:
             print(f"Language: {lang} (98%)", file=sys.stderr)
         print("@progress 0.500 Transcribing", file=sys.stderr)
+        print("@partial " + __import__("json").dumps("hello\\n"), file=sys.stderr)
+        print("@partial " + __import__("json").dumps("world\\n"), file=sys.stderr)
         print("hello world")
     elif tool == "translate":
         source = sys.stdin.read().strip()
         to = args[args.index("--to") + 1]
         src = args[args.index("--from") + 1] if "--from" in args else "?"
+        print("@partial " + __import__("json").dumps("[draft]\\n"), file=sys.stderr)
         print(f"[{src}>{to}] " + {"de": "hallo Welt", "pl": "witaj świecie"}.get(to, source))
     elif tool == "accent":
         if not args[0]:
@@ -210,6 +213,30 @@ def test_parse_line():
     assert pipeline.parse_line(" 12%|#         | 3000/25000 [00:03<00:22, 900frames/s]") == ("progress", (0.12, None))
     assert pipeline.parse_line("Language: en (97%)") == ("status", "Language: en (97%)")
     assert pipeline.parse_line("   \n") is None
+
+
+def test_parse_partial_lines():
+    line = '@partial "Za\\u017c\\u00f3\\u0142\\u0107\\nnext \\"line\\"\\n"\n'
+    assert pipeline.parse_line(line, "transcribe") == ("partial", ("transcribe", 'Zażółć\nnext "line"\n'))
+    assert pipeline.parse_line('@partial "broken', "translate") == ("status", '@partial "broken')
+    assert pipeline.parse_line('@partial "a"b"', "translate") is None  # not one JSON string: dropped
+    assert pipeline.parse_line('@partial 42', "translate") == ("status", "@partial 42")
+
+
+def test_run_streams_text_as_the_tools_report_it(fake, monkeypatch):
+    monkeypatch.setattr(ollama, "status", lambda: ollama.Status.READY)
+    events = []
+    result = Runner(lambda kind, value: events.append((kind, value)), command=fake).run(Options("URL", "speech", "de"))
+    text = [(k, v) for k, v in events if k in ("partial", "transcribed", "step")]
+    assert text == [
+        ("step", (1, 2, "Transcribing")),
+        ("partial", ("transcribe", "hello\n")), ("partial", ("transcribe", "world\n")),
+        ("transcribed", "hello world\n"),  # the final transcript before translating starts
+        ("step", (2, 2, "Translating")),
+        ("partial", ("translate", "[draft]\n")),
+    ]
+    assert result.transcript == "hello world\n" and "[draft]" not in result.translation  # stdout is the result
+    assert not any(k == "status" and "@partial" in v for k, v in events)
 
 
 def test_describe_language():

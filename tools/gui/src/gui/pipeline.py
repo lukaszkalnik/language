@@ -338,13 +338,22 @@ STEP_TITLES = {
 }
 _PROGRESS_LINE = re.compile(r"^@progress\s+([0-9.]+)\s*(.*)$")
 _TQDM_LINE = re.compile(r"^(.*?)\s*(\d{1,3})%\|")  # tqdm bars, e.g. model downloads
+_PARTIAL_LINE = re.compile(r'^@partial\s+(".*")$')  # a piece of output, ready before the end
 
 
-def parse_line(line: str) -> tuple[str, object] | None:
-    """One stderr line as an event: ("progress", (fraction, label or None)) or ("status", text)."""
+def parse_line(line: str, tool: str = "") -> tuple[str, object] | None:
+    """One stderr line of `tool` as an event: ("progress", (fraction, label or None)),
+    ("partial", (tool, piece of output)) or ("status", text)."""
     text = line.strip()
     if not text:
         return None
+    m = _PARTIAL_LINE.match(text)
+    if m:
+        try:
+            piece = json.loads(m.group(1))
+        except ValueError:
+            piece = None
+        return ("partial", (tool, piece)) if isinstance(piece, str) else None
     m = _PROGRESS_LINE.match(text)
     if m:
         return "progress", (min(1.0, float(m.group(1))), m.group(2) or None)
@@ -358,8 +367,10 @@ def parse_line(line: str) -> tuple[str, object] | None:
 class Runner:
     """Runs a plan, one process at a time, reporting events; `cancel()` stops it.
 
-    on_event gets ("step", (index, count, title)), ("status", text) for a stderr line, and
-    ("progress", (fraction, label)) from the tools' `@progress` lines and tqdm bars.
+    on_event gets ("step", (index, count, title)), ("status", text) for a stderr line,
+    ("progress", (fraction, label)) from the tools' `@progress` lines and tqdm bars,
+    ("partial", (tool, piece)) for output a tool has ready before it ends (`@partial`) and
+    ("transcribed", transcript) once the transcript is final, before the steps after it.
     """
 
     def __init__(self, on_event: Callable[[str, object], None] = lambda kind, value: None,
@@ -399,7 +410,7 @@ class Runner:
         reader.start()
         err_lines = []
         for line in self._proc.stderr:  # text mode turns progress bars' \r into line breaks
-            event = parse_line(line)
+            event = parse_line(line, tool)
             if event is None:
                 continue
             if event[0] == "status":
@@ -433,6 +444,7 @@ class Runner:
                 self.on_event("step", (index, len(steps), STEP_TITLES.get(tool, tool)))
                 if tool == "transcribe":
                     result.transcript, err = self._run(tool, args)
+                    self.on_event("transcribed", result.transcript)
                     language = detected_language(err)
                     result.language_code = language
                     result.language = describe_language(err) or ""
