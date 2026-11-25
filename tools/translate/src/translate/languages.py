@@ -5,6 +5,7 @@ from __future__ import annotations
 # code: (English name, NLLB-200 code)
 LANGUAGES = {
     "af": ("Afrikaans", "afr_Latn"), "ar": ("Arabic", "arb_Arab"), "bg": ("Bulgarian", "bul_Cyrl"),
+    "br": ("Breton", None),  # not in NLLB-200: translated into French first (breton.py)
     "bn": ("Bengali", "ben_Beng"), "ca": ("Catalan", "cat_Latn"), "cs": ("Czech", "ces_Latn"),
     "cy": ("Welsh", "cym_Latn"), "da": ("Danish", "dan_Latn"), "de": ("German", "deu_Latn"),
     "el": ("Greek", "ell_Grek"), "en": ("English", "eng_Latn"), "es": ("Spanish", "spa_Latn"),
@@ -35,7 +36,7 @@ def normalise(code: str) -> str:
     if base in LANGUAGES:
         return base
     for k, (name, nllb) in LANGUAGES.items():
-        if c in (name.lower(), nllb.lower()):
+        if c in (name.lower(), (nllb or "").lower()):
             return k
     raise ValueError(f"unknown language {code!r}; use a code such as de, en, pl, fr")
 
@@ -47,7 +48,7 @@ def name(code: str | None) -> str:
 
 
 def nllb_code(code: str) -> str:
-    if code not in LANGUAGES:
+    if not LANGUAGES.get(code, (None, None))[1]:
         raise ValueError(f"NLLB has no mapping for language {code!r}")
     return LANGUAGES[code][1]
 

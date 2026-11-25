@@ -46,7 +46,32 @@ def read_input(arg: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+class Deferred:
+    """The backend, set up only when a line needs it: Breton into French needs none."""
+
+    def __init__(self, name: str, make, model: str | None = None):
+        self.name, self.model, self._make, self._real = name, model, make, None
+        self.on_progress = None
+
+    def prepare(self) -> None:
+        if self._real is None:
+            self._real = self._make()
+
+    def translate(self, chunk, source, target, song=False):
+        self.prepare()
+        self._real.on_progress = self.on_progress
+        return self._real.translate(chunk, source, target, song)
+
+
 def make_translator(args):
+    if args.translator == "nllb":
+        return Deferred("nllb", lambda: _make_translator(args))
+    from .llm import DEFAULT_MODEL
+
+    return Deferred("llm", lambda: _make_translator(args), args.llm_model or DEFAULT_MODEL)
+
+
+def _make_translator(args):
     if args.translator == "nllb":
         from ingest.cli import choose_ipv4
 
@@ -71,7 +96,9 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("the input contains no text")
         translator = make_translator(args)
         main_src = translate_document(doc, translator, target, source)
-        backend = f"{translator.name}:{getattr(translator, 'model', None) if args.translator == 'llm' else args.nllb_model}"
+        backend = f"{translator.name}:{translator.model if args.translator == 'llm' else args.nllb_model}"
+        if doc.via:  # Breton went through French first
+            backend = f"{doc.via}+{backend}" if doc.backend_used else doc.via
         if args.json:
             sys.stdout.write(render.to_json(doc, main_src, target, backend))
         elif args.only_translation:

@@ -200,3 +200,91 @@ def test_progress_lines_follow_translated_lines(monkeypatch, capsys):
     fractions = [float(ln.split()[1]) for ln in lines]
     assert 0 < fractions[0] < 1 and fractions[-1] == 1.0  # partway through the chunk, then done
     assert fractions == sorted(fractions)
+
+
+# --- Breton: into French first --------------------------------------------------------
+
+class FakeBreton:
+    """Stands in for the Breton-French model: marks each line as French."""
+
+    name = "m2m100-br-fr"
+    seen: list = []
+
+    def __call__(self, texts, on_progress=None):
+        FakeBreton.seen = list(texts)
+        return [f"fr:{t}" for t in texts]
+
+
+BRETON_JSON = {
+    "mode": "speech", "language": "br",
+    "segments": [
+        {"id": 1, "start": 0.0, "end": 2.0, "text": "Demat deoc'h.", "language": "br"},
+        {"id": 2, "start": 2.0, "end": 4.0, "text": "Good morning.", "language": "en"},
+        {"id": 3, "start": 4.0, "end": 6.0, "text": "Penaos 'mañ kont ?", "language": "br"},
+    ],
+}
+
+
+def test_breton_goes_through_french_to_other_languages():
+    doc = parse(json.dumps(BRETON_JSON))
+    fake = FakeTranslator()
+    translate_document(doc, fake, "de", progress=False, breton=FakeBreton)
+    assert FakeBreton.seen == ["Demat deoc'h.", "Penaos 'mañ kont ?"]
+    sent = [u for chunk, _, _ in fake.calls for u in chunk.units]
+    assert [u.text for u in sent] == ["fr:Demat deoc'h.", "Good morning.", "fr:Penaos 'mañ kont ?"]
+    assert [u.language for u in sent] == ["fr", "en", "fr"]
+    assert fake.calls[0][1] == "fr"  # the backend is told the source is French, not Breton
+    assert [u.translation for u in doc.content()] == ["FR:DEMAT DEOC'H.", "GOOD MORNING.", "FR:PENAOS 'MAÑ KONT ?"]
+    assert [u.text for u in doc.content()][0] == "Demat deoc'h."  # the original line is kept
+    assert doc.via == "m2m100-br-fr" and doc.backend_used
+
+
+def test_breton_into_french_needs_only_the_breton_model():
+    data = dict(BRETON_JSON, segments=[s for s in BRETON_JSON["segments"] if s["language"] == "br"])
+    doc = parse(json.dumps(data))
+    fake = FakeTranslator()
+    translate_document(doc, fake, "fr", progress=False, breton=FakeBreton)
+    assert not fake.calls and not doc.backend_used
+    assert [u.translation for u in doc.content()] == ["fr:Demat deoc'h.", "fr:Penaos 'mañ kont ?"]
+
+
+def test_no_breton_lines_no_breton_model():
+    doc = parse(json.dumps(TRANSCRIBE_JSON))
+
+    def no_model():
+        raise AssertionError("the Breton model must not be loaded")
+
+    translate_document(doc, FakeTranslator(), "de", progress=False, breton=no_model)
+    assert doc.via is None
+
+
+def test_into_breton_is_refused_and_breton_is_not_an_nllb_language():
+    from translate import languages
+
+    with pytest.raises(ValueError, match="into Breton"):
+        translate_document(parse("Hello there, how are you?"), FakeTranslator(), "br", source="en", progress=False)
+    assert languages.normalise("Breton") == "br"
+    with pytest.raises(ValueError, match="NLLB"):
+        languages.nllb_code("br")
+
+
+def test_breton_fillers_are_left_out_before_translating():
+    from translate.breton import without_fillers
+
+    assert without_fillers("peogwir euh me oa bet ganet euh ba Plouven, er bloavezh") == \
+        "peogwir me oa bet ganet ba Plouven, er bloavezh"
+    assert without_fillers("Hag euh… e oa") == "Hag e oa"
+    assert without_fillers("Euh, setu.") == "setu."
+    assert without_fillers("Heuliañ an hent") == "Heuliañ an hent"  # words starting like a filler stay
+
+
+def test_the_backend_is_set_up_only_when_a_line_needs_it():
+    from translate.cli import Deferred
+
+    made = []
+    lazy = Deferred("llm", lambda: made.append(1) or FakeTranslator(), "gemma4:12b")
+    data = dict(BRETON_JSON, segments=[s for s in BRETON_JSON["segments"] if s["language"] == "br"])
+    translate_document(parse(json.dumps(data)), lazy, "fr", progress=False, breton=FakeBreton)
+    assert not made  # Breton into French: no Ollama needed
+    translate_document(parse(json.dumps(BRETON_JSON)), lazy, "de", progress=False, breton=FakeBreton)
+    assert made == [1]

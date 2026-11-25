@@ -35,6 +35,8 @@ class Document:
     mode: str | None = None  # "song" | "speech" from transcribe JSON, else guessed
     language: str | None = None  # main source language if known
     data: dict | None = field(default=None, repr=False)  # the JSON input, kept for --json output
+    via: str | None = None  # a model that took some lines into French first (Breton)
+    backend_used: bool = False  # False when the lines in --via already gave every translation
 
     def content(self) -> list[Unit]:
         return [u for u in self.units if not u.blank]

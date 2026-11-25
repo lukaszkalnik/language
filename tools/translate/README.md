@@ -29,6 +29,17 @@ translate notes.txt --to de --translator nllb --from pl     # offline, no Ollama
 | `llm` (default) | a local model through [Ollama](https://ollama.com), `--llm-model` (default `gemma4:12b`, 7.7 GB) | asked for a faithful line-by-line translation, not a poetic rewrite; numbered lines keep alignment, missing lines are re-requested |
 | `nllb` | Meta NLLB-200 via transformers, `--nllb-model 600m` (2.5 GB, default) or `1.3b` (5.5 GB) | offline fallback; sentence by sentence, no cross-line context |
 
+### Breton
+
+Neither backend knows Breton well (NLLB-200 has none; gemma4:12b mostly guesses), so Breton
+lines are first translated into French with
+[`lgrobol/m2m100_418M_br_fr`](https://huggingface.co/lgrobol/m2m100_418M_br_fr) (MIT, 1.9 GB,
+downloaded on first use), an M2M100 trained on Breton-French text; the chosen backend then
+takes the French on to the target language. Into French no backend is needed (no Ollama).
+Hesitations such as "euh" are left out first. On Breton TV subtitles it scored chrF 50 against
+their French subtitles, gemma4:12b directly 32. Translating *into* Breton is not supported.
+`--json` names both steps, e.g. `m2m100-br-fr+llm:gemma4:12b`.
+
 If Ollama is not running or the model is not pulled, translate says so and how to fix it:
 
 ```bash

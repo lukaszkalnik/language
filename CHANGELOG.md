@@ -9,7 +9,9 @@ important changes first. The section for a release opens its GitHub release note
   it is transcribed with a Whisper trained on Breton, which gets about three in four words
   right where the general model got one in five. The first Breton run downloads 967 MB once.
   Choose it rather than leaving the language on Automatic: detection takes Breton for French
-  most of the time.
+  most of the time. Breton is translated into French with a model trained for that (1.9 GB,
+  downloaded once), and from French on into the language you chose. Breton into French works
+  without Ollama.
 - **Choose the spoken language in the window.** A new "Spoken language" selector next to
   Speech/Song: leave it on Automatic, or pick the language when detection gets it wrong, as it
   often does with rare languages, short clips and songs. The transcript is then made in that
