@@ -28,12 +28,12 @@ from .pipeline import (
     format_summary,
     format_transcript,
     format_translation,
-    jump_choice,
     language_name,
     looks_like_input,
     spoken_choices,
 )
 from .rangeslider import RangeSlider
+from .selector import Selector
 from .timerange import format_time
 
 PAD = 8
@@ -86,11 +86,10 @@ class App:
         ttk.Radiobutton(opts, text="Song", value="song", variable=self.kind).pack(side="left", padx=(PAD, 2 * PAD))
         ttk.Label(opts, text="Spoken language").pack(side="left")
         self.spoken_names = spoken_choices()
-        self.spoken = ttk.Combobox(opts, values=self.spoken_names, state="readonly", width=18)
+        self.spoken = Selector(opts, self.spoken_names, width=18)
         self.spoken.set(choice_for(settings.load().get("spoken_language")))
         self.spoken.pack(side="left", padx=(4, 2 * PAD))
-        self.spoken.bind("<<ComboboxSelected>>", lambda e: self._spoken_changed())
-        self.spoken.bind("<KeyPress>", self._spoken_key)
+        self.spoken.bind("<<ComboboxSelected>>", lambda e: self._spoken_changed(), add=True)
         self.accent = tk.BooleanVar(value=False)
         self.accent_check = ttk.Checkbutton(opts, text="Accent (English only)", variable=self.accent)
         self.accent_check.pack(side="left")
@@ -100,7 +99,7 @@ class App:
         tr.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(PAD, 0))
         ttk.Label(tr, text="Translate to").pack(side="left")
         self.names = [f"{name} ({code})" for code, name in sorted(LANGUAGES.items(), key=lambda kv: kv[1])]
-        self.language = ttk.Combobox(tr, values=self.names, state="readonly", width=18)
+        self.language = Selector(tr, self.names, width=18)
         self.language.set("English (en)")
         self.language.pack(side="left", padx=(4, PAD))
         self.translate_button = ttk.Button(tr, text="Translate", command=self.translate_now, state="disabled")
@@ -275,18 +274,8 @@ class App:
         return choice_code(self.spoken.get())
 
     def _spoken_changed(self) -> None:
-        self.spoken.selection_clear()
         settings.save({"spoken_language": self._spoken_code()})
         self._sync_accent()
-
-    def _spoken_key(self, event) -> str | None:
-        """A letter jumps to the next language starting with it (the list is long)."""
-        found = jump_choice(self.spoken_names, self.spoken.get(), event.char)
-        if found is None:
-            return None
-        self.spoken.set(found)
-        self._spoken_changed()
-        return "break"
 
     def _sync_accent(self) -> None:
         """Accent recognition is for English: greyed out while another language is chosen."""
