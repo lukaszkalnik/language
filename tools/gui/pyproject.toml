@@ -1,6 +1,6 @@
 [project]
 name = "gui"
-version = "0.3.1"
+version = "0.4.0"
 description = "A small desktop window (Tk) over the tools: paste a URL, pick song/speech, translation, accent"
 readme = "README.md"
 requires-python = ">=3.11"

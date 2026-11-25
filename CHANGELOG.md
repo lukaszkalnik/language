@@ -3,7 +3,7 @@
 What changed for people using Language, newest release first. Each release lists the most
 important changes first. The section for a release opens its GitHub release notes.
 
-## Unreleased
+## 0.4.0
 
 - **Breton.** Choose Breton as the spoken language (`--language br` on the command line) and
   it is transcribed with a Whisper trained on Breton, which gets about three in four words
@@ -49,6 +49,8 @@ important changes first. The section for a release opens its GitHub release note
 - Lists in the window keep their indent when a line wraps, so they are easier to read.
 - Speaker labels no longer send usage data to pyannote's servers (pyannote.audio does that by
   default). To allow it, set `PYANNOTE_METRICS_ENABLED=true`.
+- After updating, the app sets up its tools again on the first start (a few minutes; models
+  already downloaded are kept).
 
 ## 0.3.1
 
