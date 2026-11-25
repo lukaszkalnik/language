@@ -3,11 +3,21 @@
 - Work directly on `main`; no feature branches.
 - Commit after every atomic change (one logical change per commit: parts that only make sense together; separate fixes are separate commits; tests passing), and push.
 - `uv run pytest` at the root runs all unit tests (no network, no models); keep it green.
+  It also checks the architecture rules: import boundaries and lazy heavy imports
+  (`tests/test_architecture.py`), size and complexity limits (`tests/test_code_size.py`) and
+  types with basedpyright (`tests/test_types.py`). Libraries outside the root environment are
+  blocked in unit tests (root `conftest.py`): a test that needs one uses `pytest.importorskip`.
   Integration tests: `uv run --package <tool> pytest -m integration tools/<tool>`.
 - `uv run ruff check .` before committing.
+- The baselines (`tests/code_size_baseline.json`, `.basedpyright/baseline.json`) only shrink:
+  never add entries to get a check green; fix the code, or ask the user (see below).
 - Conventions every tool follows: data on stdout, everything for humans on stderr;
   `-` reads a WAV stream from stdin; one `error:` line and a non-zero exit code on failure.
-- Heavy model dependencies belong to the tool that needs them, never to `ingest` or the root.
+- Heavy model dependencies belong to the tool that needs them, never to `ingest` or the root,
+  and are imported inside the function that needs them. Tools depend on `ingest`, never on each
+  other; the window uses the standard library only and runs the tools as commands.
+- Model states so illegal ones cannot be written: `Enum`s for fixed choices, unions of frozen
+  dataclasses matched with `match` + `assert_never` for values with several shapes.
 - The user's Mac has 16 GB of memory: run one model-heavy process at a time (Whisper, Ollama,
   translation models, measurements), never several in parallel or in the background next to
   each other, and stop servers you started (e.g. `ollama serve`) when done.
