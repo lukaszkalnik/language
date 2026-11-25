@@ -11,5 +11,5 @@ its status and a link to its concept or specification in [docs/tasks](docs/tasks
 4. ✅ [0006 Spoken language in the window](docs/tasks/0006-spoken-language-selector.md)
 5. ✅ [0001 Breton support](docs/tasks/0001-breton-support.md)
 6. ⏸️ [0003 Signed and notarized app](docs/tasks/0003-signed-app.md)
-7. 🚧 [0008 Architecture and code-quality rules](docs/tasks/0008-architecture-rules.md)
-8. 💡 [0007 Faster and clearer updates](docs/tasks/0007-faster-updates.md)
+7. 💡 [0007 Faster and clearer updates](docs/tasks/0007-faster-updates.md)
+8. 🚧 [0008 Architecture and code-quality rules](docs/tasks/0008-architecture-rules.md)
