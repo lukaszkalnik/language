@@ -8,6 +8,9 @@
 - Conventions every tool follows: data on stdout, everything for humans on stderr;
   `-` reads a WAV stream from stdin; one `error:` line and a non-zero exit code on failure.
 - Heavy model dependencies belong to the tool that needs them, never to `ingest` or the root.
+- The user's Mac has 16 GB of memory: run one model-heavy process at a time (Whisper, Ollama,
+  translation models, measurements), never several in parallel or in the background next to
+  each other, and stop servers you started (e.g. `ollama serve`) when done.
 - Releases happen only when the user asks for one; never offer or suggest a release after a change.
 - Every release (a `v*` tag) gets a section `## <version>` in `CHANGELOG.md`, written for the
   people using the app: most important changes first, in plain words saying how each change
