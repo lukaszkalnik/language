@@ -5,6 +5,11 @@ important changes first. The section for a release opens its GitHub release note
 
 ## Unreleased
 
+- **Breton.** Choose Breton as the spoken language (`--language br` on the command line) and
+  it is transcribed with a Whisper trained on Breton, which gets about three in four words
+  right where the general model got one in five. The first Breton run downloads 967 MB once.
+  Choose it rather than leaving the language on Automatic: detection takes Breton for French
+  most of the time.
 - **Choose the spoken language in the window.** A new "Spoken language" selector next to
   Speech/Song: leave it on Automatic, or pick the language when detection gets it wrong, as it
   often does with rare languages, short clips and songs. The transcript is then made in that

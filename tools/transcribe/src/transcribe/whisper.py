@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import platform
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -31,17 +33,38 @@ MLX_MODELS = {
 FASTER_MODELS = {"large-v3": "large-v3", "turbo": "large-v3-turbo"}
 FASTER_REPOS = {"large-v3": "Systran/faster-whisper-large-v3", "turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo"}
 
-# KB-Whisper large (National Library of Sweden, Apache-2.0): large-v3 fine-tuned on 50,000 hours
-# of Swedish. Pinned to one commit, the "standard" transcription style; its repo carries the
-# transformers weights (converted for MLX on first use) and a CTranslate2 copy for faster-whisper.
-KB_REPO = "KBLab/kb-whisper-large"
-KB_REVISION = "d5d5984b4d8f7c4847a8ea203f1976285fb28300"
-KB_FASTER_FILES = ["model.bin", "config.json", "preprocessor_config.json", "tokenizer.json", "vocabulary.json"]
-MODELS = ("large-v3", "turbo", "kb-whisper")
+
+@dataclass(frozen=True)
+class FineTune:
+    """A Whisper fine-tuned for one language, published in the transformers layout."""
+
+    repo: str
+    revision: str  # pinned: a new upload never changes results unnoticed
+    label: str  # for download messages
+    folder: str  # name of the converted copy in the cache
+    fp16: bool = True  # False: overflows in float16 on MLX
+    ct2_files: tuple[str, ...] = ()  # a CTranslate2 copy in the repo; empty: converted on first use
+
+
+FINE_TUNES = {
+    # KB-Whisper large (National Library of Sweden, Apache-2.0): large-v3 fine-tuned on 50,000
+    # hours of Swedish, the "standard" transcription style. Overflows in float16 on MLX (its word
+    # timings all come out as 0): float32, twice the memory.
+    "kb-whisper": FineTune(
+        "KBLab/kb-whisper-large", "d5d5984b4d8f7c4847a8ea203f1976285fb28300", "KB-Whisper large, Swedish",
+        "kb-whisper-large-d5d5984", fp16=False,
+        ct2_files=("model.bin", "config.json", "preprocessor_config.json", "tokenizer.json", "vocabulary.json")),
+    # Whisper small fine-tuned on ~80 hours of Breton by the Anaouder project (MIT): broadcasts,
+    # dialect recordings, Common Voice. No CTranslate2 copy: converted for faster-whisper too.
+    "whisper-br": FineTune(
+        "gweltou/whisper-small-br_260315", "32f4d9e1e4f854fa39907b3346ee15421fcf0789", "Whisper small, Breton",
+        "whisper-small-br-32f4d9e"),
+}
+MODELS = ("large-v3", "turbo", *FINE_TUNES)
 DESCRIPTIONS = {"large-v3": "Whisper large-v3", "turbo": "Whisper large-v3-turbo",
-                "kb-whisper": "KB-Whisper, trained on Swedish"}
+                "kb-whisper": "KB-Whisper, trained on Swedish", "whisper-br": "Whisper small, trained on Breton"}
 # Models trained for one language, used for it when --model is auto (the default).
-LANGUAGE_MODELS = {"sv": "kb-whisper"}
+LANGUAGE_MODELS = {"sv": "kb-whisper", "br": "whisper-br"}
 SEED = 0  # temperature fallback samples at random; a fixed seed makes runs repeatable (MLX)
 
 
@@ -57,31 +80,48 @@ def model_for(choice: str, language: str | None, per_passage_languages: bool = F
     return "large-v3"
 
 
-def mlx_kb_whisper() -> str:
-    """Folder of KB-Whisper in the MLX layout: downloaded and converted on first use."""
-    from .convert import convert_checkpoint
-
-    dst = cache_dir("models", "transcribe") / f"kb-whisper-large-{KB_REVISION[:7]}-mlx"
-    if (dst / "weights.safetensors").exists():
-        return str(dst)
-    files = ["config.json", "model.safetensors"]
-    size = hf_repo_size(KB_REPO, files, KB_REVISION)
-    print(f"Downloading KB-Whisper large, Swedish ({human_size(size) if size else 'size unknown'}), first run only...",
+def _download(tune: FineTune, files: list[str], dst: Path, backend: str) -> Path:
+    """The transformers files of a fine-tune, into a temporary folder next to `dst`."""
+    size = hf_repo_size(tune.repo, files, tune.revision)
+    print(f"Downloading {tune.label} ({human_size(size) if size else 'size unknown'}), first run only...",
           file=sys.stderr, flush=True)
     from huggingface_hub import hf_hub_download
 
     src = dst.with_name(dst.name + ".download")
-    try:
-        for name in files:
-            hf_hub_download(KB_REPO, name, revision=KB_REVISION, local_dir=src)
-        convert_checkpoint(src, dst)
-    except Exception as exc:
-        raise ModelError(f"could not set up {KB_REPO} ({exc.__class__.__name__}: {exc}). "
-                         "Check your network connection.") from None
+    for name in files:
+        hf_hub_download(tune.repo, name, revision=tune.revision, local_dir=src)
+    print(f"Converting {tune.label} for {backend}...", file=sys.stderr, flush=True)
+    return src
+
+
+def converted(name: str, backend: str) -> str:
+    """Folder of a fine-tune converted for `backend` ("mlx" or "ct2"): made on first use.
+
+    Only the converted copy is kept; the transformers download is deleted afterwards.
+    """
     import shutil
 
-    shutil.rmtree(src, ignore_errors=True)  # the MLX copy is all that is needed from now on
+    tune = FINE_TUNES[name]
+    dst = cache_dir("models", "transcribe") / f"{tune.folder}-{backend}"
+    if (dst / ("weights.safetensors" if backend == "mlx" else "model.bin")).exists():
+        return str(dst)
+    files = ["config.json", "model.safetensors"] + (["tokenizer.json"] if backend == "ct2" else [])
+    try:
+        src = _download(tune, files, dst, "MLX" if backend == "mlx" else "CTranslate2")
+        if backend == "mlx":
+            from .convert import convert_checkpoint
+
+            convert_checkpoint(src, dst)
+        else:
+            from .convert import convert_ct2
+
+            convert_ct2(src, dst)
+    except Exception as exc:
+        raise ModelError(f"could not set up {tune.repo} ({exc.__class__.__name__}: {exc}). "
+                         "Check your network connection.") from None
+    shutil.rmtree(dst.with_name(dst.name + ".download"), ignore_errors=True)
     return str(dst)
+
 
 # Decoding settings shared by both backends. condition_on_previous_text=False stops a
 # hallucination in one window from being copied into the next.
@@ -113,12 +153,12 @@ class MLXWhisper:
 
     def __init__(self, model: str):
         quiet_libraries("mlx")
-        # KB-Whisper overflows in float16 (its word timings all come out as 0): float32, twice the memory.
-        self.fp16 = model != "kb-whisper"
-        if model == "kb-whisper":
-            self.repo = KB_REPO
-            path = mlx_kb_whisper()
+        if model in FINE_TUNES:
+            tune = FINE_TUNES[model]
+            self.repo, self.fp16 = tune.repo, tune.fp16
+            path = converted(model, "mlx")
         else:
+            self.fp16 = True
             self.repo = MLX_MODELS[model]
             probe = "weights.npz" if model == "large-v3" else "weights.safetensors"
             announce_hf_download(self.repo, probe, what=f"Whisper {model} (MLX)")
@@ -172,15 +212,17 @@ class FasterWhisper:
         from faster_whisper import WhisperModel
 
         compute = "float16" if device == "cuda" else "int8"
-        if model == "kb-whisper":
-            source = hf_snapshot(KB_REPO, KB_FASTER_FILES, "model.bin", "KB-Whisper large, Swedish (CTranslate2)",
-                                 KB_REVISION)
+        tune = FINE_TUNES.get(model)
+        if tune and tune.ct2_files:
+            source = hf_snapshot(tune.repo, list(tune.ct2_files), "model.bin", f"{tune.label} (CTranslate2)",
+                                 tune.revision)
+        elif tune:
+            source = converted(model, "ct2")
         else:
             announce_hf_download(FASTER_REPOS[model], "model.bin", what=f"Whisper {model} (CTranslate2)")
+            local = hf_local_path(FASTER_REPOS[model])
+            source = local if local != FASTER_REPOS[model] else FASTER_MODELS[model]
         try:
-            if model != "kb-whisper":
-                local = hf_local_path(FASTER_REPOS[model])
-                source = local if local != FASTER_REPOS[model] else FASTER_MODELS[model]
             self.model = WhisperModel(source, device="cuda" if device == "cuda" else "cpu", compute_type=compute)
         except Exception as exc:
             raise ModelError(f"could not load Whisper {model} ({exc.__class__.__name__}: {exc})") from None

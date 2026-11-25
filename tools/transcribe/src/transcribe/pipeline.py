@@ -304,7 +304,7 @@ def run(opts: Options) -> Result:
     wav = src.cached_wav(SR, 1, use_cache=opts.use_cache)
     # The general model detects the language (and keys the cache); a language's own model, if
     # one is used, only transcribes, and its results are cached under its name.
-    detector = "large-v3" if opts.model in ("auto", "kb-whisper") else opts.model
+    detector = "large-v3" if opts.model == "auto" or opts.model in whisper.FINE_TUNES else opts.model
     workdir = cache_dir("derived", "transcribe", src.key(detector))
 
     with WavReader(wav) as reader:

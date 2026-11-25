@@ -1,7 +1,7 @@
 # transcribe
 
 Detects the language and transcribes speech or singing with Whisper large-v3, locally
-(Swedish with KB-Whisper, a Whisper trained on Swedish).
+(Swedish with KB-Whisper, a Whisper trained on Swedish; Breton with a Whisper trained on Breton).
 Works on separated vocals from `vocals`, on full songs, and on podcasts, interviews and lectures.
 
 ```bash
@@ -31,10 +31,15 @@ The transcript goes to stdout; mode, languages, progress and warnings go to stde
    taken for a common one, e.g. Breton for French).
 4. **Transcription** with Whisper: MLX (`mlx-whisper`) on Apple Silicon, `faster-whisper`
    elsewhere. `--model auto` (default) picks the language's own model if there is one
-   (Swedish: KB-Whisper) and large-v3 otherwise; `--model large-v3`, `turbo` or `kb-whisper`
-   choose one. A file transcribed passage by passage in several languages keeps large-v3.
+   (Swedish: KB-Whisper; Breton: a Whisper small trained on Breton) and large-v3 otherwise;
+   `--model large-v3`, `turbo`, `kb-whisper` or `whisper-br` choose one. A file transcribed
+   passage by passage in several languages keeps large-v3.
    KB-Whisper gets many more Swedish words right, but leaves out some spoken fillers
    ("ju", "så"); on a Mac it runs at about half the speed of large-v3.
+   Breton needs `--language br`: Whisper's detection takes it for French most of the time. The
+   Breton model gets about three in four words right on clear read speech (Common Voice) and
+   about three in five on broadcast conversation (large-v3: one in five on read speech); it writes
+   fillers ("euh") and numbers in words, and is about three times as fast as large-v3.
    On separated vocals, sung stretches that no line covers are transcribed again one by one
    (Whisper sometimes skips a passage inside a whole song).
 5. **Hallucination control**: VAD, `condition_on_previous_text=False`, temperature fallback,
@@ -77,6 +82,7 @@ Speakers are named "Speaker 1", "Speaker 2"... or by `--names "Anna,Ben"`, in or
 | `mlx-community/whisper-large-v3-mlx` | 3.1 GB | default on Apple Silicon |
 | `mlx-community/whisper-large-v3-turbo` | 1.6 GB | `--model turbo` |
 | [`KBLab/kb-whisper-large`](https://huggingface.co/KBLab/kb-whisper-large) (Apache-2.0) | 3.2 GB download, 3.1 GB kept | Swedish; on Apple Silicon converted to MLX on first use (runs in float32: about 6 GB of memory, ~2× slower than large-v3) |
+| [`gweltou/whisper-small-br_260315`](https://huggingface.co/gweltou/whisper-small-br_260315) (MIT) | 967 MB download, 460 MB kept | Breton; Whisper small trained on ~80 hours of Breton (Anaouder project), converted to MLX or CTranslate2 on first use |
 | `Systran/faster-whisper-large-v3` | 3.1 GB | default elsewhere |
 | `KBLab/kb-whisper-large` (CTranslate2 copy) | 3.1 GB | Swedish elsewhere |
 | Silero VAD | 2 MB | bundled with the `silero-vad` package |

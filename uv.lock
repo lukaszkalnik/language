@@ -4273,6 +4273,7 @@ dependencies = [
     { name = "speechbrain" },
     { name = "torch" },
     { name = "torchaudio" },
+    { name = "transformers", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 [package.metadata]
@@ -4288,6 +4289,7 @@ requires-dist = [
     { name = "speechbrain", specifier = "==1.1.2" },
     { name = "torch", specifier = "==2.15.0" },
     { name = "torchaudio", specifier = "==2.11.1" },
+    { name = "transformers", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'", specifier = "==5.23.0" },
 ]
 
 [[package]]

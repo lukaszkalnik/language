@@ -1,5 +1,6 @@
 import numpy as np
 
+from transcribe import whisper
 from transcribe.convert import convert_weights, mlx_config, mlx_name
 from transcribe.whisper import model_for
 
@@ -10,6 +11,29 @@ def test_swedish_gets_kb_whisper_unless_a_model_is_chosen():
     assert model_for("auto", "sv", per_passage_languages=True) == "large-v3"
     assert model_for("large-v3", "sv") == "large-v3"
     assert model_for("turbo", "de") == "turbo"
+
+
+def test_breton_gets_the_breton_whisper():
+    assert model_for("auto", "br") == "whisper-br"
+    assert model_for("auto", "fr") == "large-v3"
+    assert model_for("auto", "br", per_passage_languages=True) == "large-v3"
+
+
+def test_converted_copies_keep_their_cache_folders(tmp_path, monkeypatch):
+    # KB-Whisper's MLX copy from earlier versions must be found again, not converted anew
+    monkeypatch.setattr(whisper, "cache_dir", lambda *parts: tmp_path)
+    for name, backend, probe in (("kb-whisper", "mlx", "weights.safetensors"), ("whisper-br", "ct2", "model.bin")):
+        folder = tmp_path / f"{whisper.FINE_TUNES[name].folder}-{backend}"
+        folder.mkdir()
+        (folder / probe).write_bytes(b"")
+        assert whisper.converted(name, backend) == str(folder)
+    assert whisper.FINE_TUNES["kb-whisper"].folder + "-mlx" == "kb-whisper-large-d5d5984-mlx"
+
+
+def test_every_model_has_a_description_and_pinned_revision():
+    assert set(whisper.DESCRIPTIONS) == set(whisper.MODELS)
+    assert all(len(t.revision) == 40 for t in whisper.FINE_TUNES.values())
+    assert set(whisper.LANGUAGE_MODELS.values()) <= set(whisper.FINE_TUNES)
 
 
 def test_transformers_names_become_mlx_names():

@@ -1,8 +1,9 @@
-"""Hugging Face Whisper checkpoints (transformers layout) -> the MLX layout mlx-whisper loads.
+"""Hugging Face Whisper checkpoints (transformers layout) -> the layouts mlx-whisper and faster-whisper load.
 
-Fine-tuned Whisper models such as KBLab's KB-Whisper are published in the transformers layout
-(plus CTranslate2 for faster-whisper), not for MLX. The weights are the same tensors under
-other names, so converting them takes seconds once the checkpoint is downloaded.
+Fine-tuned Whisper models such as KBLab's KB-Whisper or the Breton Whisper are published in the
+transformers layout, not for MLX (and some not for CTranslate2 either). For MLX the weights are
+the same tensors under other names, so converting them takes seconds once the checkpoint is
+downloaded; CTranslate2 has its own converter.
 """
 
 from __future__ import annotations
@@ -83,6 +84,22 @@ def convert_checkpoint(src: Path, dst: Path) -> Path:
     tmp.mkdir(parents=True)
     mx.save_safetensors(str(tmp / "weights.safetensors"), weights)
     (tmp / "config.json").write_text(json.dumps(mlx_config(hf_config), indent=2), encoding="utf-8")
+    shutil.rmtree(dst, ignore_errors=True)
+    tmp.replace(dst)
+    return dst
+
+
+def convert_ct2(src: Path, dst: Path) -> Path:
+    """A CTranslate2 copy for faster-whisper (other platforms than Apple Silicon), in float16.
+
+    Needs transformers and torch; faster-whisper converts the weights to int8 or float16 as it
+    loads them, depending on the device.
+    """
+    from ctranslate2.converters import TransformersConverter
+
+    tmp = dst.with_name(dst.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    TransformersConverter(str(src), copy_files=["tokenizer.json"]).convert(str(tmp), quantization="float16", force=True)
     shutil.rmtree(dst, ignore_errors=True)
     tmp.replace(dst)
     return dst

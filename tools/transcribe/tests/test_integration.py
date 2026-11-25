@@ -23,6 +23,19 @@ def test_short_video_speech_json(tmp_path):
     assert "Mode: speech" in proc.stderr
 
 
+def test_breton_uses_the_breton_whisper():
+    # Wikitongues, "Yann speaking Breton" (Breton subtitles: "Setu, penaos 'm eus bet desket brezhoneg?").
+    # The default cache keeps the converted model between runs; --no-cache transcribes anew.
+    cmd = [sys.executable, "-m", "transcribe.cli", "https://youtu.be/IyBNVrLQ2-A", "--end", "0:30",
+           "--language", "br", "--json", "--no-cache"]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    data = json.loads(proc.stdout)
+    assert data["language"] == "br" and data["model"].endswith(":whisper-br")
+    text = " ".join(s["text"] for s in data["segments"]).lower()
+    assert "brezhoneg" in text and "zud" in text
+
+
 def test_pyannote_reads_telemetry_switch():
     """No network needed, but importing pyannote takes seconds, so it is kept out of the unit tests."""
     import os
