@@ -3,7 +3,9 @@
 What changed for people using Language, newest release first. Each release lists the most
 important changes first. The section for a release opens its GitHub release notes.
 
-## 0.4.0
+## 0.4.1
+
+(0.4.0 was tagged but never published: its build stopped at a failing test.)
 
 - **Breton.** Choose Breton as the spoken language (`--language br` on the command line) and
   it is transcribed with a Whisper trained on Breton, which gets about three in four words
