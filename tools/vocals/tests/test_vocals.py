@@ -78,7 +78,7 @@ def test_piped_stdout_gets_the_wav_stream(monkeypatch, tmp_path):
         pytest.skip("ffmpeg not installed")
     wav, stem = _fake_separation(monkeypatch, tmp_path)
     buf = io.BytesIO()
-    fake_stdout = io.TextIOWrapper(buf)
+    fake_stdout = io.TextIOWrapper(buf, encoding="utf-8")
     fake_stdout.isatty = lambda: False
     monkeypatch.setattr(sys, "stdout", fake_stdout)
     assert cli.main([str(wav), "--stem", "instrumental"]) == 0

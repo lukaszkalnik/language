@@ -18,7 +18,7 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).parent.parent
-PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text())
+PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 MEMBERS = {Path(m).name: ROOT / m for m in PROJECT["tool"]["uv"]["workspace"]["members"]}
 STDLIB = set(sys.stdlib_module_names)
 
@@ -80,7 +80,7 @@ def violations(members=MEMBERS, root=ROOT):
         rel = path.relative_to(root).as_posix()
         kind = path.relative_to(members[name]).parts[0]  # src, tests, or build scripts (packaging)
         local = {p.stem for p in path.parent.glob("*.py")} if kind == "tests" else set()
-        for module, top_level in imports(ast.parse(path.read_text(), rel)):
+        for module, top_level in imports(ast.parse(path.read_text(encoding="utf-8"), rel)):
             top = module.partition(".")[0]
             if (rel, module) in EXCEPTIONS or top in STDLIB or top == name or top in local:
                 continue

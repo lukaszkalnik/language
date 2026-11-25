@@ -75,7 +75,13 @@ target-version = "py311"
 
 [tool.ruff.lint]
 # See docs/architecture.md. Left out on purpose: PTH, BLE, T20, PL, TRY, EM, FBT, S (task 0008).
-select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "PIE", "PERF", "ISC", "N", "TID", "ICN", "RUF"]
+select = [
+    "E", "F", "W", "I", "B", "UP", "C4", "SIM", "PIE", "PERF", "ISC", "N", "TID", "ICN", "RUF",
+    "PLW1514",  # open()/read_text() without encoding: Windows would read cp1252 instead of UTF-8
+]
+# PLW1514 is still a preview rule; explicit-preview-rules enables only the preview rules named here.
+preview = true
+explicit-preview-rules = true
 ignore = [
     "E501",
     "N818",  # exception names keep their meaning (Cancelled, StepFailed) without an Error suffix

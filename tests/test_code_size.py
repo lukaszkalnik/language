@@ -119,7 +119,7 @@ def current(root: Path = ROOT) -> dict[str, int]:
             if ".venv" in path.parts:
                 continue
             rel = path.relative_to(root).as_posix()
-            tree = ast.parse(path.read_text(), rel)
+            tree = ast.parse(path.read_text(encoding="utf-8"), rel)
             def complexity(line, rel=rel):
                 return measured.get((rel, line), 1)
 
@@ -130,7 +130,7 @@ def current(root: Path = ROOT) -> dict[str, int]:
 
 
 def test_code_meets_the_limits():
-    baseline = json.loads(BASELINE.read_text())
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     found = current()
     new = [f"{key} is {value} (limit {LIMITS[key.rsplit(': ', 1)[1]]})" for key, value in found.items()
            if key not in baseline]
@@ -140,7 +140,7 @@ def test_code_meets_the_limits():
 
 
 def test_the_baseline_only_shrinks():
-    baseline = json.loads(BASELINE.read_text())
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     found = current()
     fixed = [key for key in baseline if key not in found]
     better = [f'"{key}": {found[key]}' for key in baseline if key in found and found[key] < baseline[key]]
@@ -183,6 +183,6 @@ class Point:
 
 def test_complexity_comes_from_ruff():
     measured = complexities(ROOT)
-    tree = ast.parse((ROOT / "packages/ingest/src/ingest/timeparse.py").read_text())
+    tree = ast.parse((ROOT / "packages/ingest/src/ingest/timeparse.py").read_text(encoding="utf-8"))
     lines = [n.lineno for n in ast.walk(tree) if isinstance(n, FUNCTIONS)]
     assert all(("packages/ingest/src/ingest/timeparse.py", line) in measured for line in lines)

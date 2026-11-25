@@ -26,7 +26,7 @@ ROOT = Path(__file__).parent
 
 def root_environment() -> set[str]:
     """Distributions the root environment has: its default groups, pytest, and what they require."""
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     groups = project["tool"]["uv"]["default-groups"]
     todo = [Requirement(r).name for g in groups for r in project["dependency-groups"][g]] + ["pytest"]
     members = [Path(m).name for m in project["tool"]["uv"]["workspace"]["members"]]
