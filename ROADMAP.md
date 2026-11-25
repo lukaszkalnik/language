@@ -13,3 +13,4 @@ its status and a link to its concept or specification in [docs/tasks](docs/tasks
 6. ⏸️ [0003 Signed and notarized app](docs/tasks/0003-signed-app.md)
 7. 💡 [0007 Faster and clearer updates](docs/tasks/0007-faster-updates.md)
 8. ✅ [0008 Architecture and code-quality rules](docs/tasks/0008-architecture-rules.md)
+9. 📝 [0009 Ollama installed from the window](docs/tasks/0009-ollama-setup.md)
