@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from gui import pipeline
+from gui import ollama, pipeline
 from gui.pipeline import Options, Runner, StepFailed
 
 # Stands in for the real tools: behaves by tool name, takes no models.
@@ -107,17 +107,18 @@ def test_tool_command_prefers_path_then_uv(tmp_path: Path):
 
 
 def test_run_speech_translate_accent(fake, monkeypatch):
-    monkeypatch.setattr(pipeline, "ollama_models", lambda: None)
+    monkeypatch.setattr(ollama, "status", lambda: ollama.Status.NOT_INSTALLED)
     events = []
     result = Runner(lambda kind, value: events.append((kind, value)), command=fake).run(
         Options("URL", "speech", "de", True))
     assert result.transcript.strip() == "hello world"
     assert result.translation.strip() == "[en>de] hallo Welt" and result.translated_to == "de"
     assert result.accent.strip() == "us  80%"
-    assert pipeline.format_summary(result) == "LANGUAGE\nEnglish (en, 98%)\n\nACCENT\nus  80%\n"
+    tip = ollama.tip(ollama.Status.NOT_INSTALLED)
+    assert pipeline.format_summary(result) == f"LANGUAGE\nEnglish (en, 98%)\n\nACCENT\nus  80%\n\n{tip}\n"
     text = pipeline.format_result(result)
-    assert text.startswith("LANGUAGE\nEnglish (en, 98%)\n\nACCENT\nus  80%\n\nTRANSCRIPT\nhello world\n\n")
-    assert "TRANSLATION (German)\n[en>de] hallo Welt\n\nTranslated offline with NLLB" in text
+    assert text.startswith(f"LANGUAGE\nEnglish (en, 98%)\n\nACCENT\nus  80%\n\n{tip}\n\nTRANSCRIPT\nhello world\n\n")
+    assert text.endswith("TRANSLATION (German)\n[en>de] hallo Welt\n")  # the tip is not part of the translation
     assert ("status", "Language: en (98%)") in events
     assert ("language", "English (en, 98%)") in events
     assert ("progress", (0.5, "Transcribing")) in events
@@ -128,7 +129,7 @@ def test_run_speech_translate_accent(fake, monkeypatch):
 
 def test_translate_afterwards_without_transcribing_again(fake, monkeypatch):
     monkeypatch.setenv("FAKE_LANG", "pl")
-    monkeypatch.setattr(pipeline, "ollama_models", lambda: [pipeline.LLM_MODEL])
+    monkeypatch.setattr(ollama, "status", lambda: ollama.Status.READY)
     result = Runner(command=fake).run(Options("URL"))
     assert result.translation == "" and result.language_code == "pl"
     tools = []
@@ -255,7 +256,7 @@ def test_plan_with_a_chosen_language():
 
 
 def test_run_with_a_chosen_language(fake, monkeypatch):
-    monkeypatch.setattr(pipeline, "ollama_models", lambda: None)
+    monkeypatch.setattr(ollama, "status", lambda: ollama.Status.NOT_INSTALLED)
     result = Runner(command=fake).run(Options("URL", "speech", "de", language="sv"))
     assert result.language == "Swedish (sv, chosen)" and result.language_code == "sv"
     assert result.translation.strip() == "[sv>de] hallo Welt"  # the chosen language is the source

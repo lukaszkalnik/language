@@ -6,19 +6,17 @@ Nothing here imports Tk or a model library, so it is unit-tested without a displ
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import threading
-import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import setup
+from . import ollama, setup
 from .timerange import range_args
 
 # Target languages offered in the selector (a subset of translate's ISO 639-1 codes).
@@ -88,29 +86,6 @@ def jump_choice(choices: list[str], current: str, letter: str) -> str | None:
 def accent_possible(spoken: str | None) -> bool:
     """Accent recognition is for English: possible with English or automatic detection."""
     return spoken in (None, "en")
-
-
-LLM_MODEL = "gemma4:12b"  # translate's default Ollama model
-NLLB_NOTE = ("Translated offline with NLLB. For better translations install Ollama from "
-             "https://ollama.com and download the {model} model in it.")
-
-
-def ollama_models(host: str | None = None, timeout: float = 2) -> list[str] | None:
-    """Models in a running Ollama, or None when it is not running."""
-    host = host or os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
-    url = (host if host.startswith("http") else f"http://{host}") + "/api/tags"
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
-            return [m.get("name", "") for m in json.load(resp).get("models", [])]
-    except (OSError, ValueError):
-        return None
-
-
-def translator(models: list[str] | None) -> str:
-    """The local LLM when Ollama runs with translate's model, else NLLB (no extra install)."""
-    if models and any(m == LLM_MODEL or m.startswith(LLM_MODEL + "-") for m in models):
-        return "llm"
-    return "nllb"
 
 
 class Cancelled(Exception):
@@ -267,6 +242,11 @@ def translate_args(to: str, source: str | None = None, translator: str = "llm") 
     if source and (source in LANGUAGES or source in EXTRA_SOURCES):
         args += ["--from", source]
     return [*args, "--only-translation", "--translator", translator]
+
+
+def translator(state: ollama.Status) -> str:
+    """translate's backend: the local LLM when Ollama is ready, else NLLB (no extra install)."""
+    return "llm" if state is ollama.Status.READY else "nllb"
 
 
 def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
@@ -446,8 +426,8 @@ class Runner:
         self._whole = opts.start is None and opts.end is None
         with tempfile.TemporaryDirectory(prefix="language-gui-") as tmp:
             vocals = str(Path(tmp) / "vocals.wav")
-            backend = translator(ollama_models()) if opts.translate_to else "llm"
-            steps = plan(opts, backend)
+            state = ollama.status() if opts.translate_to else ollama.Status.READY
+            steps = plan(opts, translator(state))
             for index, (tool, args) in enumerate(steps, 1):
                 args = [vocals if a == "{vocals}" else a for a in args]
                 self.on_event("step", (index, len(steps), STEP_TITLES.get(tool, tool)))
@@ -463,7 +443,7 @@ class Runner:
                         result.notes.append("No speech or singing found.")
                         break
                 elif tool == "translate":
-                    self._translate(result, opts.translate_to, backend)
+                    self._translate(result, opts.translate_to, state)
                 elif tool == "accent":
                     if language and language != "en":
                         name = language_name(language)
@@ -478,16 +458,16 @@ class Runner:
         """Translate a finished run's transcript (again), without transcribing again."""
         if not result.transcript.strip():
             raise StepFailed("nothing to translate yet: run a transcription first")
-        backend = translator(ollama_models())
+        state = ollama.status()
         self.on_event("step", (1, 1, STEP_TITLES["translate"]))
-        self._translate(result, to, backend)
+        self._translate(result, to, state)
         return result
 
-    def _translate(self, result: Result, to: str, backend: str) -> None:
-        translation, _ = self._run("translate", translate_args(to, result.language_code, backend),
-                                   stdin=result.transcript)
+    def _translate(self, result: Result, to: str, state: ollama.Status) -> None:
+        args = translate_args(to, result.language_code, translator(state))
+        translation, _ = self._run("translate", args, stdin=result.transcript)
         result.translation, result.translated_to = translation, to
-        result.translation_notes = [NLLB_NOTE.format(model=LLM_MODEL)] if backend == "nllb" else []
+        result.translation_notes = [t for t in [ollama.tip(state)] if t]
 
 
 def format_summary(result: Result) -> str:
@@ -497,8 +477,8 @@ def format_summary(result: Result) -> str:
         parts.append("LANGUAGE\n" + result.language)
     if result.accent.strip():
         parts.append("ACCENT\n" + result.accent.strip())
-    if result.notes:
-        parts.append("\n".join(result.notes))
+    if result.notes or result.translation_notes:
+        parts.append("\n".join(result.notes + result.translation_notes))
     return "\n\n".join(parts) + ("\n" if parts else "")
 
 
@@ -509,10 +489,7 @@ def format_transcript(result: Result) -> str:
 def format_translation(result: Result) -> str:
     if not result.translation.strip():
         return ""
-    text = result.translation.rstrip() + "\n"
-    if result.translation_notes:
-        text += "\n" + "\n".join(result.translation_notes) + "\n"
-    return text
+    return result.translation.rstrip() + "\n"
 
 
 def format_result(result: Result) -> str:

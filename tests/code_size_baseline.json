@@ -15,7 +15,7 @@
   "tools/gui/src/gui/app.py::App._poll: lines per function": 65,
   "tools/gui/src/gui/app.py::App._poll: nesting": 4,
   "tools/gui/src/gui/app.py::App._poll: complexity": 17,
-  "tools/gui/src/gui/pipeline.py::<module>: functions per module": 36,
+  "tools/gui/src/gui/pipeline.py::<module>: functions per module": 35,
   "tools/gui/src/gui/pipeline.py::Runner._run: lines per function": 44,
   "tools/gui/src/gui/pipeline.py::Runner._run: complexity": 12,
   "tools/gui/src/gui/pipeline.py::Runner.run: nesting": 4,

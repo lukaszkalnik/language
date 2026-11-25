@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
-from . import settings, setup
+from . import ollama, settings, setup
 from .pipeline import (
     LANGUAGES,
     Cancelled,
@@ -260,11 +260,11 @@ class App:
             self.summary.grid_remove()
 
     def _show_result(self, result: Result) -> None:
-        self._set_summary(format_summary(result))
         self._fill(self.output, format_transcript(result))
         self._show_translation(result)
 
     def _show_translation(self, result: Result) -> None:
+        self._set_summary(format_summary(result))  # with a translation's notes
         name = language_name(result.translated_to) if result.translated_to else ""
         self.translation_title.set(f"Translation into {name}" if name else "Translation")
         hint = "" if not result.transcript.strip() else "Choose a language above and press Translate."
@@ -423,6 +423,7 @@ class App:
             self.runner.cancel()
         if self._info:
             self._info.cancel()
+        ollama.stop()
         self.root.destroy()
 
     # -- progress: step, bar (determinate with a percentage, animated without), clock ----------

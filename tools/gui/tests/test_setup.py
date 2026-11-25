@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from gui import pipeline, setup
+from gui import ollama, pipeline, setup
 
 
 def test_needed_only_for_the_packaged_app(monkeypatch, tmp_path: Path):
@@ -38,15 +38,10 @@ def test_install_ffmpeg_copies_an_executable(monkeypatch, tmp_path: Path):
     assert target.name == f"ffmpeg{setup.EXE}" and target.read_bytes() == b"bin"
 
 
-def test_translator_prefers_ollama_with_the_model():
-    assert pipeline.translator(["gemma4:12b", "llama3:8b"]) == "llm"
-    assert pipeline.translator(["llama3:8b"]) == "nllb"
-    assert pipeline.translator([]) == "nllb"
-    assert pipeline.translator(None) == "nllb"  # Ollama not running
-
-
-def test_ollama_models_none_when_not_running():
-    assert pipeline.ollama_models("127.0.0.1:9", timeout=0.5) is None
+def test_translator_uses_ollama_only_when_ready():
+    assert pipeline.translator(ollama.Status.READY) == "llm"
+    for state in (ollama.Status.NO_MODEL, ollama.Status.NOT_STARTED, ollama.Status.NOT_INSTALLED):
+        assert pipeline.translator(state) == "nllb"
 
 
 def test_plan_passes_the_translator():
