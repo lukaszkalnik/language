@@ -43,6 +43,9 @@ one click:
   - `ollama.binary()` also looks in that folder (after PATH and the usual places, so a
     user's own Ollama wins). The server started from there uses the default models folder
     (`~/.ollama/models`), so a later own install of Ollama finds the model already there.
+- **Decided: the stand-alone command only**, not the Ollama app with its menu-bar icon. It
+  stays invisible, needs no move to Applications, does not start at login, and stops with the
+  window.
 - **Memory**: gemma4:12b needs roughly 8–10 GB of RAM while it translates. Below 16 GB of
   memory the offer says so and suggests staying with NLLB; transcription is finished before
   translation starts, so Whisper and the LLM never run at the same time.
@@ -53,9 +56,6 @@ one click:
   with its button goes into its own widget module, like `selector.py`), `setup.py` (intro
   text), CHANGELOG.
 - **Open questions**:
-  - Stand-alone command only (proposed), or the full Ollama app with its menu-bar icon,
-    which the user would then manage themselves? The app needs moving to Applications and
-    starts at login; the command is invisible and stops with the window.
   - Should the button also appear after a run without translation, or only once NLLB has
     actually translated?
   - Does the packaged app's code signing (task 0003, parked) matter for running a downloaded
