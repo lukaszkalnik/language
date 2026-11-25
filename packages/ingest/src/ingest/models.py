@@ -133,6 +133,8 @@ def hf_snapshot(repo_id: str, patterns: list[str] | None = None, probe_file: str
 
 
 def pick_device(requested: str = "auto") -> str:
+    if requested == "cpu":
+        return "cpu"  # needs no torch: unit tests run without it
     import torch
 
     if requested != "auto":
