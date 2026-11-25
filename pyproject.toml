@@ -45,9 +45,9 @@ pythonpath = [
 addopts = "-m 'not integration' --import-mode=importlib"
 
 # Type checking (pyright's checker, as basedpyright: it brings its own Node, no download at run time).
-# tests/test_types.py runs it with the model libraries stubbed as Any, so the result is the same
-# with or without them installed. Errors from before the check are in .basedpyright/baseline.json
-# (basedpyright's own baseline: fixed errors drop out with --writebaseline, new ones fail).
+# tests/test_types.py runs it with only the root environment's libraries visible, so the result is
+# the same with or without the tools' libraries installed. Errors from before the check are in
+# .basedpyright/baseline.json (fixed ones drop out with --writebaseline, new ones fail).
 [tool.basedpyright]
 include = ["packages", "tools", "tests", "conftest.py"]
 exclude = ["**/.venv", "**/build", "**/dist", "build", "dist"]
@@ -63,8 +63,6 @@ pythonVersion = "3.11"
 typeCheckingMode = "standard"
 reportMissingImports = "none"
 reportMissingModuleSource = "none"
-# tests/test_types.py writes the Any stubs for model libraries here before each check.
-stubPath = "build/type-stubs"
 
 [tool.ruff]
 line-length = 110

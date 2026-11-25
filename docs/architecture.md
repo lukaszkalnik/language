@@ -73,8 +73,9 @@ a function; split a module along the feature's parts.
 - **(checked)** Every source and test passes basedpyright in `standard` mode
   (`tests/test_types.py`). Errors from before the check are in `.basedpyright/baseline.json`;
   new ones fail. After fixing old ones run `uv run python tests/test_types.py --writebaseline`,
-  which removes them from the baseline. Libraries outside the root environment are typed as
-  `Any` there, so the result does not depend on what is installed.
+  which removes them from the baseline. basedpyright sees only the root environment's
+  libraries there (the tools' libraries are typed from typeshed's stubs or not at all), so the
+  result does not depend on what is installed.
 - Annotate every function's parameters and return type.
 - Make illegal states unrepresentable:
   - a fixed set of choices is an `Enum` (or a `Literal[...]` for plain strings at a boundary
