@@ -67,6 +67,7 @@ def _fake_base_model(cache_root):
 
 
 def test_is_cached_needs_every_file_the_model_loads(cache_root):
+    pytest.importorskip("torch")
     from accent.classify import AccentClassifier
 
     for name in ("ecapa", "xlsr"):
@@ -82,6 +83,7 @@ def test_is_cached_needs_every_file_the_model_loads(cache_root):
 
 
 def test_cached_model_loads_with_the_hub_offline(cache_root, monkeypatch):
+    pytest.importorskip("huggingface_hub")
     from types import SimpleNamespace
 
     from huggingface_hub import constants

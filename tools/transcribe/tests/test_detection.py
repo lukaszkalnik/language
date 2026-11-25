@@ -163,6 +163,7 @@ def test_pyannote_telemetry_is_off_unless_the_user_turned_it_on(monkeypatch):
 
 
 def test_cached_pyannote_pipeline_loads_with_the_hub_offline_first(monkeypatch, capsys):
+    pytest.importorskip("huggingface_hub")
     import sys
     import types
 

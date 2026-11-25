@@ -1,9 +1,15 @@
+from importlib.util import find_spec
+
 import pytest
 
 from ingest.models import hf_is_cached, hub_offline, load_cached_first
 
 REPO = "someone/some-model"
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+# The root environment has no model libraries (they belong to the tools), so these tests run
+# only where a tool's environment brings huggingface_hub.
+needs_hub = pytest.mark.skipif(find_spec("huggingface_hub") is None, reason="huggingface_hub is not installed")
 
 
 @pytest.fixture
@@ -18,12 +24,14 @@ def hf_cache(tmp_path):
     return tmp_path
 
 
+@needs_hub
 def test_hf_is_cached_in_a_given_cache_dir(hf_cache):
     assert hf_is_cached(REPO, "config.json", cache_dir=str(hf_cache))
     assert hf_is_cached(REPO, cache_dir=str(hf_cache))
     assert not hf_is_cached("someone/other", "config.json", cache_dir=str(hf_cache))
 
 
+@needs_hub
 def test_hub_offline_serves_cached_files_without_asking(hf_cache):
     from huggingface_hub import constants, hf_hub_download
 
@@ -37,6 +45,7 @@ def test_hub_offline_serves_cached_files_without_asking(hf_cache):
     assert constants.HF_HUB_OFFLINE is before
 
 
+@needs_hub
 def test_hub_offline_restores_the_flag_after_an_error():
     from huggingface_hub import constants
 
@@ -63,30 +72,35 @@ def _recording_load(*results):
     return load, calls
 
 
+@needs_hub
 def test_load_cached_first_stays_offline_when_cached():
     load, calls = _recording_load("model")
     assert load_cached_first(load, cached=True) == "model"
     assert calls == [True]
 
 
+@needs_hub
 def test_load_cached_first_goes_online_if_a_file_is_missing():
     load, calls = _recording_load(OSError("missing file"), "model")
     assert load_cached_first(load, cached=True) == "model"
     assert calls == [True, False]
 
 
+@needs_hub
 def test_load_cached_first_goes_online_on_none():
     load, calls = _recording_load(None, "model")
     assert load_cached_first(load, cached=True) == "model"
     assert calls == [True, False]
 
 
+@needs_hub
 def test_load_cached_first_not_cached_loads_once_online():
     load, calls = _recording_load("model")
     assert load_cached_first(load, cached=False) == "model"
     assert calls == [False]
 
 
+@needs_hub
 def test_connection_trap_catches_hub_requests(tmp_path):
     import subprocess
     import sys

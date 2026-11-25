@@ -115,6 +115,7 @@ def _hf_file(root: Path, repo: str, name: str, text: str = "") -> None:
 
 
 def test_demucs_cached_needs_the_bag_and_all_its_weights(tmp_path):
+    pytest.importorskip("yaml")
     spec = separate.MODELS["htdemucs_ft"]
     hf = str(tmp_path / "hf")
     assert not separate.demucs_cached(spec, hf)
@@ -126,6 +127,7 @@ def test_demucs_cached_needs_the_bag_and_all_its_weights(tmp_path):
 
 
 def test_demucs_cached_rejects_a_broken_bag_file(tmp_path):
+    pytest.importorskip("yaml")
     spec = separate.MODELS["htdemucs"]
     _hf_file(tmp_path / "hf", spec.hf_repo, "htdemucs.yaml", "not: [a bag")
     assert not separate.demucs_cached(spec, str(tmp_path / "hf"))
@@ -167,6 +169,7 @@ print("loaded")
 
 @pytest.mark.parametrize("how", ["plain", "cached_first"])
 def test_cached_demucs_loads_without_a_connection(tmp_path, how):
+    pytest.importorskip("demucs")
     import subprocess
 
     from ingest.testing import ConnectionTrap
