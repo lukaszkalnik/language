@@ -9,7 +9,14 @@ COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 # The root environment has no model libraries (they belong to the tools), so these tests run
 # only where a tool's environment brings huggingface_hub.
-needs_hub = pytest.mark.skipif(find_spec("huggingface_hub") is None, reason="huggingface_hub is not installed")
+def importable(module: str) -> bool:
+    try:
+        return find_spec(module) is not None
+    except ImportError:  # blocked in the root unit-test run (see conftest.py)
+        return False
+
+
+needs_hub = pytest.mark.skipif(not importable("huggingface_hub"), reason="huggingface_hub is not installed")
 
 
 @pytest.fixture
