@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from ingest.cache import cache_dir
-from ingest.cli import progress_wanted, report_progress
+from ingest.cli import progress_wanted, report_partial, report_progress
 from ingest.errors import ModelError
 from ingest.models import (
     announce_hf_download,
@@ -246,6 +246,7 @@ class FasterWhisper:
         for s in segments:
             if show_progress and duration:
                 report_progress("Transcribing", s.end / duration)
+                report_partial(s.text.strip() + "\n")  # a song's lines as they come (speech: per piece)
             raw = {"start": s.start, "end": s.end, "text": s.text, "avg_logprob": s.avg_logprob,
                    "no_speech_prob": s.no_speech_prob, "compression_ratio": s.compression_ratio,
                    "words": [{"start": w.start, "end": w.end, "word": w.word, "probability": w.probability}

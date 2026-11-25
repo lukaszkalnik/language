@@ -5,9 +5,9 @@ from __future__ import annotations
 import sys
 from dataclasses import replace
 
-from ingest.cli import progress_wanted, report_progress
+from ingest.cli import progress_wanted, report_partial, report_progress
 
-from . import languages
+from . import languages, render
 from .chunks import MAX_CHARS, make_chunks
 from .document import Document
 
@@ -52,6 +52,20 @@ def breton_first(todo: list, target: str, breton, progress: bool) -> list[tuple]
             unit.translation = text
         return []
     return [(unit, replace(unit, text=text, language="fr")) for unit, text in zip(lines, french, strict=True)]
+
+
+def fill_in(doc: Document, units: list, translations: list[str], shown: int) -> int:
+    """Put a chunk's translations in and report its lines, with the input's lines before them.
+
+    `shown`: the input's index up to which lines are reported already; returns the new one.
+    Lines in between that are not in the chunk are blank or already in the target language.
+    """
+    for unit, text in zip(units, translations, strict=True):
+        unit.translation = text
+    upto = max(u.index for u in units) + 1
+    own = {u.index: u for u in units}  # Breton lines: their French copies hold the translation
+    report_partial(render.translation_lines([own.get(u.index, u) for u in doc.units if shown <= u.index < upto]))
+    return max(shown, upto)
 
 
 def translate_document(doc: Document, translator, target: str, source: str | None = None,
@@ -99,7 +113,7 @@ def translate_document(doc: Document, translator, target: str, source: str | Non
     doc.backend_used = True
     sub = Document(doc.kind, todo, mode=doc.mode, language="fr" if main == "br" else main)
     chunks = make_chunks(sub, max_chars=max_chars, whole=(doc.mode == "song" and translator.name == "llm"))
-    total, done = sum(len(c.units) for c in chunks), 0
+    total, done, shown = sum(len(c.units) for c in chunks), 0, 0
     for i, chunk in enumerate(chunks, 1):
         if progress and len(chunks) > 1:
             status(f"Translating part {i}/{len(chunks)} ({len(chunk.units)} line(s))...")
@@ -110,8 +124,7 @@ def translate_document(doc: Document, translator, target: str, source: str | Non
         out = translator.translate(chunk, sub.language, target, song=doc.mode == "song")
         done += len(chunk.units)
         report_progress("Translating", done / total)
-        for unit, text in zip(chunk.units, out, strict=True):
-            unit.translation = text
+        shown = fill_in(doc, chunk.units, out, shown)
     for unit, copy in pairs:
         unit.translation = copy.translation
     empty = sum(1 for u in doc.content() if not (u.translation or "").strip())

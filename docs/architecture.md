@@ -125,7 +125,10 @@ a function; split a module along the feature's parts.
 - Data on stdout, everything for humans on stderr (status, progress, warnings), so commands
   can be piped. `-` reads a WAV stream from stdin.
 - Progress for the window as `@progress <fraction> <label>` lines on stderr, only with
-  `LANGUAGE_PROGRESS=1` (`ingest.cli.report_progress`).
+  `LANGUAGE_PROGRESS=1` (`ingest.cli.report_progress`). Under the same variable, output that is
+  ready before the end goes out as `@partial "<JSON string>"` lines on stderr
+  (`ingest.cli.report_partial`): a piece to show at once, which the final stdout replaces. Stdout
+  itself is written only when done, so it stays the one finished result.
 - Common input options come from `ingest.cli.add_input_args`; `--info` prints the input's title
   and duration as one JSON line.
 

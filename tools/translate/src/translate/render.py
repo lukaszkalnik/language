@@ -48,8 +48,12 @@ def side_by_side(doc: Document, width: int = 120) -> str:
 
 
 def only_translation(doc: Document) -> str:
-    lines = ["" if u.blank else _label(u, u.translation or "") for u in doc.units]
-    return "\n".join(lines) + "\n"
+    return translation_lines(doc.units)
+
+
+def translation_lines(units: list[Unit]) -> str:
+    """The translations of these units, a line each (blank units stay blank)."""
+    return "".join(("" if u.blank else _label(u, u.translation or "")) + "\n" for u in units)
 
 
 def to_json(doc: Document, source: str | None, target: str, backend: str) -> str:

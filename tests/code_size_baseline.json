@@ -24,10 +24,10 @@
   "tools/transcribe/src/transcribe/diarize.py::ecapa_turns: lines per function": 48,
   "tools/transcribe/src/transcribe/langdetect.py::pick_windows: complexity": 11,
   "tools/transcribe/src/transcribe/lines.py::_split: nesting": 4,
-  "tools/transcribe/src/transcribe/pipeline.py::<module>: functions per module": 23,
+  "tools/transcribe/src/transcribe/pipeline.py::<module>: functions per module": 21,
   "tools/transcribe/src/transcribe/pipeline.py::detect_language: parameters": 6,
   "tools/transcribe/src/transcribe/pipeline.py::transcribe_speech: parameters": 8,
-  "tools/transcribe/src/transcribe/pipeline.py::transcribe_speech: lines per function": 47,
+  "tools/transcribe/src/transcribe/pipeline.py::transcribe_speech: lines per function": 46,
   "tools/transcribe/src/transcribe/pipeline.py::transcribe_speech: nesting": 4,
   "tools/transcribe/src/transcribe/pipeline.py::transcribe_lost: parameters": 7,
   "tools/transcribe/src/transcribe/pipeline.py::transcribe_song: parameters": 8,
@@ -40,8 +40,8 @@
   "tools/transcribe/src/transcribe/whisper.py::FasterWhisper.transcribe: parameters": 6,
   "tools/translate/src/translate/chunks.py::make_chunks: nesting": 4,
   "tools/translate/src/translate/core.py::translate_document: parameters": 7,
-  "tools/translate/src/translate/core.py::translate_document: lines per function": 64,
-  "tools/translate/src/translate/core.py::translate_document: complexity": 17,
+  "tools/translate/src/translate/core.py::translate_document: lines per function": 63,
+  "tools/translate/src/translate/core.py::translate_document: complexity": 16,
   "tools/vocals/src/vocals/separate.py::separate: lines per function": 71,
   "tools/vocals/src/vocals/separate.py::separate: complexity": 14
 }

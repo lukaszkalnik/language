@@ -47,6 +47,17 @@ def report_progress(label: str, fraction: float, every: float = 0.5) -> None:
     print(f"@progress {fraction:.3f} {label}", file=sys.stderr, flush=True)
 
 
+def report_partial(text: str) -> None:
+    """With LANGUAGE_PROGRESS=1, print `@partial "<text as JSON>"` on stderr: the next piece of output.
+
+    A front end shows the pieces as they come; the result on stdout, once done, replaces them
+    (it may differ: the tools tidy up the whole text at the end). ASCII-only JSON, so any
+    stderr encoding takes it.
+    """
+    if text and progress_wanted():
+        print(f"@partial {json.dumps(text)}", file=sys.stderr, flush=True)
+
+
 def time_arg(value: str) -> float:
     try:
         return parse_time(value)

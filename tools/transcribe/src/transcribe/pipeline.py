@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sys
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,12 +11,12 @@ import numpy as np
 
 from ingest.audio import WavReader, read_wav_tags
 from ingest.cache import cache_dir
-from ingest.cli import report_progress
 from ingest.errors import AudioError
 from ingest.source import Source, open_input
 from ingest.timeparse import format_seconds
 
 from . import hallucination, langdetect, lines, mode, speakers, vad
+from .progress import Progress
 from .segments import Segment
 
 SR = 16_000
@@ -78,29 +77,6 @@ class Result:
         }
 
 
-class Progress:
-    def __init__(self, label: str, total: float):
-        self.label, self.total, self.t0 = label, total, time.time()
-        self.tty = sys.stderr.isatty()
-        self.last_print = 0.0
-
-    def __call__(self, done: float) -> None:
-        report_progress(self.label, done / self.total if self.total else 1.0)
-        now = time.time()
-        if not self.tty and now - self.last_print < 30 and done < self.total:
-            return  # in logs, one line every 30 s is enough
-        self.last_print = now
-        frac = done / self.total if self.total else 1.0
-        elapsed = now - self.t0
-        eta = f", ~{format_seconds(elapsed / frac - elapsed)} left" if 0.02 < frac < 1 else ""
-        msg = f"{self.label} {format_seconds(done)} / {format_seconds(self.total)} ({frac:.0%}{eta})"
-        status(("\r" + msg + "\033[K") if self.tty else msg, end="" if self.tty else "\n")
-
-    def finish(self) -> None:
-        if self.tty:
-            status()
-
-
 def _json_cache(path: Path, compute, use_cache: bool):
     if use_cache and path.exists():
         try:
@@ -108,10 +84,15 @@ def _json_cache(path: Path, compute, use_cache: bool):
         except ValueError:
             pass
     value = compute()
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(value), encoding="utf-8")
-    tmp.replace(path)
+    _write_json(path, value)
     return value
+
+
+def _write_json(path: Path, value) -> None:
+    """Write through a temporary file, so an interrupted run leaves no half-written cache."""
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
 
 
 def _is_separated(tags: dict) -> bool:
@@ -181,6 +162,7 @@ def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bo
         if use_cache and path.exists():
             resumed += 1
             raw = json.loads(path.read_text(encoding="utf-8"))
+            progress(done, [Segment.from_dict(d) for d in raw])
         else:
             raw = []
             for a, b in batch:
@@ -191,10 +173,8 @@ def transcribe_speech(model, reader, voice, report, workdir: Path, use_cache: bo
                 segs, _ = model.transcribe(audio, lang, offset=a)
                 raw += [s.to_dict(words=True) for s in segs]
                 done += b - a
-                progress(done)
-            tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
-            tmp.replace(path)
+                progress(done, segs)
+            _write_json(path, raw)
         done = max(done, sum(b - a for bt in batches[: i + 1] for a, b in bt))
         progress(done)
         segments += [Segment.from_dict(d) for d in raw]
@@ -267,10 +247,7 @@ def transcribe_lost(model, reader, stretches, language: str, workdir: Path, use_
     for a, b in stretches:
         segs, _ = model.transcribe(reader.read(a, b), language, offset=a)
         out += segs
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"stretches": key, "segments": [s.to_dict(words=True) for s in out]},
-                              ensure_ascii=False), encoding="utf-8")
-    tmp.replace(path)
+    _write_json(path, {"stretches": key, "segments": [s.to_dict(words=True) for s in out]})
     return out
 
 

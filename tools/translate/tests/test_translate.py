@@ -290,3 +290,17 @@ def test_the_backend_is_set_up_only_when_a_line_needs_it():
     assert not made  # Breton into French: no Ollama needed
     translate_document(parse(json.dumps(BRETON_JSON)), lazy, "de", progress=False, breton=FakeBreton)
     assert made == [1]
+
+
+def test_each_chunk_is_reported_as_soon_as_it_is_translated(monkeypatch, capsys):
+    from ingest import cli
+
+    monkeypatch.setenv(cli.PROGRESS_ENV, "1")
+    doc = parse("one\n\ntwo\n\nthree")
+    nllb = FakeTranslator()
+    nllb.name = "nllb"  # short lines read as a song, which the LLM would get in one request
+    translate_document(doc, nllb, "de", source="en", max_chars=8, progress=False)
+    pieces = [json.loads(ln.split(" ", 1)[1]) for ln in capsys.readouterr().err.splitlines()
+              if ln.startswith("@partial ")]
+    assert len(pieces) > 1  # chunk by chunk, not all at the end
+    assert "".join(pieces) == render.only_translation(doc)  # blank lines included, in order
