@@ -46,8 +46,17 @@ line-length = 110
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]
+# See docs/architecture.md. Left out on purpose: PTH, BLE, T20, PL, TRY, EM, FBT, S (task 0008).
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "PIE", "PERF", "ISC", "N", "TID", "ICN", "RUF"]
+ignore = [
+    "E501",
+    "N818",  # exception names keep their meaning (Cancelled, StepFailed) without an Error suffix
+    "RUF001", "RUF002", "RUF003",  # typographic dashes and quotes in messages are intended
+    "RUF046",  # int(round(x)) stays: x is often a numpy value
+    "SIM905",  # a word list written as one string and split() reads better than a long list literal
+]
+# BLE is not selected, but its noqa comments mark deliberate broad catches: keep them.
+external = ["BLE"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["ingest", "accent", "vocals", "transcribe", "translate", "gui"]

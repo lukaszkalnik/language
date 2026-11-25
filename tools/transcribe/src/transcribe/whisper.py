@@ -125,14 +125,14 @@ def converted(name: str, backend: str) -> str:
 
 # Decoding settings shared by both backends. condition_on_previous_text=False stops a
 # hallucination in one window from being copied into the next.
-DECODE = dict(
-    temperature=(0.0, 0.2, 0.4, 0.6, 0.8),
-    compression_ratio_threshold=2.4,
-    logprob_threshold=-1.0,
-    no_speech_threshold=0.6,
-    condition_on_previous_text=False,
-    word_timestamps=True,
-)
+DECODE = {
+    "temperature": (0.0, 0.2, 0.4, 0.6, 0.8),
+    "compression_ratio_threshold": 2.4,
+    "logprob_threshold": -1.0,
+    "no_speech_threshold": 0.6,
+    "condition_on_previous_text": False,
+    "word_timestamps": True,
+}
 
 
 def _segment(raw: dict, offset: float, language: str | None) -> Segment:

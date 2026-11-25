@@ -19,7 +19,7 @@ def isolated_cache(tmp_path):
 
 
 def _src(kind="file", **kw):
-    defaults = dict(kind=kind, path=Path("/music/My Song (live).mp3"), source_id="file-abc", start=0.0, end=None)
+    defaults = {"kind": kind, "path": Path("/music/My Song (live).mp3"), "source_id": "file-abc", "start": 0.0, "end": None}
     defaults.update(kw)
     return Source(**defaults)
 

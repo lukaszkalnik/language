@@ -153,7 +153,7 @@ class WavReader:
 
     def __init__(self, path: Path):
         self.path = path
-        self._wf = wave.open(str(path), "rb")
+        self._wf = wave.open(str(path), "rb")  # noqa: SIM115 - kept open for read(), closed in close()
         if self._wf.getsampwidth() != 2:
             raise AudioError(f"{path.name} is not 16-bit PCM")
         self.sample_rate = self._wf.getframerate()

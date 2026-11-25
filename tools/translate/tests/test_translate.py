@@ -1,4 +1,6 @@
+import itertools
 import json
+from typing import ClassVar
 
 import pytest
 
@@ -141,7 +143,7 @@ def test_chunks_hold_whole_paragraphs_with_overlapping_context():
     doc = parse(json.dumps(long_podcast()))
     chunks = make_chunks(doc, max_chars=1200, overlap=2)
     assert len(chunks) > 3
-    for prev, nxt in zip(chunks, chunks[1:], strict=False):
+    for prev, nxt in itertools.pairwise(chunks):
         assert prev.units[-1].paragraph != nxt.units[0].paragraph  # cut between paragraphs
         assert nxt.context == prev.units[-2:]  # overlap: the end of the previous chunk
     assert sum(len(c.units) for c in chunks) == 90
@@ -208,7 +210,7 @@ class FakeBreton:
     """Stands in for the Breton-French model: marks each line as French."""
 
     name = "m2m100-br-fr"
-    seen: list = []
+    seen: ClassVar[list] = []
 
     def __call__(self, texts, on_progress=None):
         FakeBreton.seen = list(texts)
@@ -235,7 +237,7 @@ def test_breton_goes_through_french_to_other_languages():
     assert [u.language for u in sent] == ["fr", "en", "fr"]
     assert fake.calls[0][1] == "fr"  # the backend is told the source is French, not Breton
     assert [u.translation for u in doc.content()] == ["FR:DEMAT DEOC'H.", "GOOD MORNING.", "FR:PENAOS 'MAÑ KONT ?"]
-    assert [u.text for u in doc.content()][0] == "Demat deoc'h."  # the original line is kept
+    assert next(u.text for u in doc.content()) == "Demat deoc'h."  # the original line is kept
     assert doc.via == "m2m100-br-fr" and doc.backend_used
 
 

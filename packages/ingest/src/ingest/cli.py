@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import socket
@@ -187,10 +188,8 @@ def run(main: Callable[[], int | None], prog: str) -> int:
         return 130
     except BrokenPipeError:
         # The reader of our stdout went away (e.g. `| head`); not an error worth a message.
-        try:
+        with contextlib.suppress(OSError):
             sys.stdout = open(os.devnull, "w")  # noqa: SIM115 - silence the flush at exit
-        except OSError:
-            pass
         return 141
     except Exception as exc:  # last resort
         if debug:

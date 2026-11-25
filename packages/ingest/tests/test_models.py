@@ -47,7 +47,7 @@ def test_hub_offline_serves_cached_files_without_asking(hf_cache):
         assert constants.HF_HUB_OFFLINE is True
         path = hf_hub_download(REPO, "config.json", cache_dir=str(hf_cache))
         assert path.endswith("config.json")
-        with pytest.raises(Exception, match="(?i)offline|local|cache"):
+        with pytest.raises(Exception, match=r"(?i)offline|local|cache"):
             hf_hub_download(REPO, "model.safetensors", cache_dir=str(hf_cache))
     assert constants.HF_HUB_OFFLINE is before
 

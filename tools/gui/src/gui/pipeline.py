@@ -61,7 +61,7 @@ AUTOMATIC = "Automatic"
 
 def spoken_choices() -> list[str]:
     """The spoken-language selector's values: Automatic, then every language by name."""
-    return [AUTOMATIC] + sorted((f"{language_name(c)} ({c})" for c in WHISPER_CODES), key=str.casefold)
+    return [AUTOMATIC, *sorted((f"{language_name(c)} ({c})" for c in WHISPER_CODES), key=str.casefold)]
 
 
 def choice_code(choice: str) -> str | None:
@@ -266,7 +266,7 @@ def translate_args(to: str, source: str | None = None, translator: str = "llm") 
     args = ["-", "--to", to]
     if source and (source in LANGUAGES or source in EXTRA_SOURCES):
         args += ["--from", source]
-    return args + ["--only-translation", "--translator", translator]
+    return [*args, "--only-translation", "--translator", translator]
 
 
 def plan(opts: Options, translator: str = "llm") -> list[tuple[str, list[str]]]:
@@ -334,7 +334,7 @@ class InfoQuery:
             raise Cancelled
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self._proc = subprocess.Popen(
-            self.command(INFO_TOOL) + [url, "--info"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            [*self.command(INFO_TOOL), url, "--info"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", env=setup.tool_env(),
             creationflags=flags,
         )

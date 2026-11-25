@@ -124,7 +124,7 @@ def test_cluster_merges_tiny_clusters():
 
 def test_embedding_windows_and_turns():
     wins = embedding_windows([(0, 5), (10, 10.5), (20, 21.5)])
-    assert wins[0] == (0, 2.0) and (20, 21.5) in wins and all(not (a == 10) for a, _ in wins)
+    assert wins[0] == (0, 2.0) and (20, 21.5) in wins and all(a != 10 for a, _ in wins)
     turns = windows_to_turns([(0, 2), (1, 3), (2, 4), (10, 12)], np.array([0, 0, 1, 1]))
     assert turns[0][2] == "S0" and turns[1][2] == "S1"
     assert turns[0][1] == pytest.approx(turns[1][0])

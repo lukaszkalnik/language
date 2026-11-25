@@ -42,9 +42,7 @@ def split_at_turns(segments: list[Segment], turns: list[tuple[float, float, str]
                 runs.append([lab, [w]])
         merged: list[list] = []
         for lab, ws in runs:  # absorb short runs into the previous one
-            if merged and len(ws) < min_words:
-                merged[-1][1].extend(ws)
-            elif merged and merged[-1][0] == lab:
+            if (merged and len(ws) < min_words) or (merged and merged[-1][0] == lab):
                 merged[-1][1].extend(ws)
             else:
                 merged.append([lab, ws])

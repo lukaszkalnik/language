@@ -74,13 +74,13 @@ def build_messages(chunk: Chunk, source: str | None, target: str, song: bool) ->
     tgt = languages.name(target)
     rules = [
         f"You are a professional translator. Translate from {src} into {tgt}.",
-        "Translate faithfully, line by line. Each numbered input line becomes exactly one numbered output line "
-        "with the same number: never merge, split, drop, reorder or add lines.",
-        "Keep the meaning, tone and register. Render idioms and wordplay with a natural equivalent where one exists, "
-        "otherwise translate the meaning; do not add explanations.",
+        ("Translate faithfully, line by line. Each numbered input line becomes exactly one numbered output line "
+         "with the same number: never merge, split, drop, reorder or add lines."),
+        ("Keep the meaning, tone and register. Render idioms and wordplay with a natural equivalent where one exists, "
+         "otherwise translate the meaning; do not add explanations."),
         "Keep names, brands and technical terms. If a line is already in the target language, repeat it unchanged.",
-        "Output only the translated lines in the form `N| translation`, one per input line. "
-        "Do not repeat the original lines, do not add notes.",
+        ("Output only the translated lines in the form `N| translation`, one per input line. "
+         "Do not repeat the original lines, do not add notes."),
     ]
     if song:
         rules.insert(2, "These are song lyrics, given in full so you can use the context. Give a faithful translation, "

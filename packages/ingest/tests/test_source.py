@@ -120,7 +120,7 @@ def test_wav_reader_slices(tmp_path):
 
 def test_ffmpeg_missing_gives_install_hint(monkeypatch):
     monkeypatch.setattr(audio.shutil, "which", lambda name: None)
-    with pytest.raises(AudioError, match="ffmpeg was not found on PATH. Install"):
+    with pytest.raises(AudioError, match=r"ffmpeg was not found on PATH\. Install"):
         audio.require_ffmpeg()
 
 

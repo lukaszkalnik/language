@@ -137,9 +137,8 @@ def plan_range(
     `cap` limits a request without --start/--end to the first `cap` seconds.
     """
     capped = False
-    if start is None and end is None and cap is not None:
-        if duration is None or duration > cap:
-            end, capped = cap, True
+    if start is None and end is None and cap is not None and (duration is None or duration > cap):
+        end, capped = cap, True
     begin = start or 0.0
     if duration is not None:
         if begin >= duration:

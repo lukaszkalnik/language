@@ -103,8 +103,8 @@ def analyse(args: argparse.Namespace) -> dict:
 def render_text(result: dict, verbose: bool) -> str:
     summary = result["summary"]
     lines = [
-        f"Top accents ({format_seconds(summary['analysed_seconds'])} of speech in "
-        f"{summary['chunks'] - summary['silent_chunks']} chunk(s), model {result['model']}):"
+        (f"Top accents ({format_seconds(summary['analysed_seconds'])} of speech in "
+         f"{summary['chunks'] - summary['silent_chunks']} chunk(s), model {result['model']}):")
     ]
     width = max(len(t["name"]) for t in result["top"])
     for rank, t in enumerate(result["top"], 1):

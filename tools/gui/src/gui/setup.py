@@ -115,11 +115,12 @@ def uv_binary() -> str:
 
 def commands(uv: str, src: Path) -> list[tuple[str, list[str]]]:
     """(what, command) for every install step, in order."""
-    steps = []
-    for tool in TOOLS:
-        steps.append((f"Installing {tool}", [
+    steps = [
+        (f"Installing {tool}", [
             uv, "tool", "install", "--python", PYTHON, "--reinstall-package", tool,
-            "--reinstall-package", "ingest", str(src / "tools" / tool)]))
+            "--reinstall-package", "ingest", str(src / "tools" / tool)])
+        for tool in TOOLS
+    ]
     steps.append(("Installing Deno (for YouTube)", [uv, "tool", "install", "--python", PYTHON, DENO]))
     steps.append(("Fetching ffmpeg", [
         uv, "run", "--no-project", "--python", PYTHON, "--with", FFMPEG_WHEEL, "python", "-c",

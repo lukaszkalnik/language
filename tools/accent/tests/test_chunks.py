@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import pytest
 
@@ -36,7 +38,7 @@ def test_chunk_covers_every_sample():
     n = 123_457
     bounds = chunk_bounds(n, chunk_seconds=1.0)
     assert bounds[0][0] == 0 and bounds[-1][1] == n
-    assert all(prev[1] == nxt[0] for prev, nxt in zip(bounds, bounds[1:], strict=False))
+    assert all(prev[1] == nxt[0] for prev, nxt in itertools.pairwise(bounds))
 
 
 # --- silence skipping ---------------------------------------------------------

@@ -266,9 +266,9 @@ def test_run_warns_about_other_languages(fake, monkeypatch):
     monkeypatch.setenv("FAKE_MIXED", "1")
     result = Runner(command=fake).run(Options("URL", language="br"))
     assert result.notes == [
-        "Other languages may be spoken: detection found English 60% at 0:10, 1:30; German 40% at 0:50 "
-        "(in 3 parts checked). Everything was transcribed as Breton; choose Automatic as the spoken "
-        "language to give each passage its own."]
+        ("Other languages may be spoken: detection found English 60% at 0:10, 1:30; German 40% at 0:50 "
+         "(in 3 parts checked). Everything was transcribed as Breton; choose Automatic as the spoken "
+         "language to give each passage its own.")]
     assert "Other languages may be spoken" in pipeline.format_summary(result)
 
 
