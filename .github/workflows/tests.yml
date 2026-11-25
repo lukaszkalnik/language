@@ -30,6 +30,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.13.8"
+      - name: Install ffmpeg
+        shell: bash
+        run: if [ "$RUNNER_OS" = Windows ]; then choco install ffmpeg -y --no-progress; else brew install ffmpeg; fi
       - name: Lint
         run: uv run ruff check .
       - name: Unit tests (root environment)
@@ -43,6 +46,8 @@ jobs:
         with:
           version: "0.13.8"
           enable-cache: true
+      - name: Install ffmpeg
+        run: brew install ffmpeg
       - name: Install every tool's libraries
         run: uv sync --all-packages
       - name: Unit tests (with the tools' libraries)
