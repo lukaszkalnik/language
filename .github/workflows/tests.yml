@@ -1,0 +1,74 @@
+# Every test on every push to main: lint and unit tests in the root environment (as the release
+# build has it), the unit tests again with every tool's libraries (the ones that need torch or
+# Demucs), and each tool's integration tests (network, real models; models cached between runs).
+name: tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.8"
+      - name: Lint
+        run: uv run ruff check .
+      - name: Unit tests (root environment)
+        run: uv run pytest -q -rs
+
+  unit-all-libraries:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.8"
+          enable-cache: true
+      - name: Install every tool's libraries
+        run: uv sync --all-packages
+      - name: Unit tests (with the tools' libraries)
+        env:
+          LANGUAGE_TEST_MODEL_LIBS: "1"
+        run: uv run --all-packages pytest -q -rs
+
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [transcribe, vocals, accent, translate]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.8"
+          enable-cache: true
+      - uses: denoland/setup-deno@v2  # yt-dlp solves YouTube's JS challenges with it
+        with:
+          deno-version: v2.x
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+      - name: Models from earlier runs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/language
+          key: models-${{ matrix.tool }}-v1
+      - name: Install ${{ matrix.tool }}
+        run: uv sync --all-packages
+      - name: Integration tests
+        run: uv run --all-packages pytest -q -rs -m integration tools/${{ matrix.tool }}

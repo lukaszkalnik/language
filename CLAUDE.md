@@ -9,6 +9,10 @@
   blocked in unit tests (root `conftest.py`): a test that needs one uses `pytest.importorskip`.
   Integration tests: `uv run --package <tool> pytest -m integration tools/<tool>`.
 - `uv run ruff check .` before committing.
+- After every push, watch the CI run it started (`gh run list --branch main --limit 3`,
+  `gh run watch <id> --exit-status`) to the end: the `tests` workflow runs every test (unit
+  tests with and without the tools' libraries, all integration tests). If it fails, fix the
+  cause and push again; tell the user about failures you cannot fix (e.g. YouTube blocking CI).
 - The baselines (`tests/code_size_baseline.json`, `.basedpyright/baseline.json`) only shrink:
   never add entries to get a check green; fix the code, or ask the user (see below).
 - Conventions every tool follows: data on stdout, everything for humans on stderr;
