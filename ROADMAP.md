@@ -9,5 +9,5 @@ its status and a link to its concept or specification in [docs/tasks](docs/tasks
 2. ✅ [0005 Better Swedish transcription](docs/tasks/0005-swedish-transcription.md)
 3. ✅ [0002 No network checks for cached models](docs/tasks/0002-model-update-checks.md)
 4. ✅ [0006 Spoken language in the window](docs/tasks/0006-spoken-language-selector.md)
-5. 💡 [0001 Breton support](docs/tasks/0001-breton-support.md)
+5. ✅ [0001 Breton support](docs/tasks/0001-breton-support.md)
 6. 💡 [0003 Signed and notarized app](docs/tasks/0003-signed-app.md)
